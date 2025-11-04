@@ -10,7 +10,7 @@ export const WelcomeScreen = ({ selectedLanguage }: WelcomeScreenProps) => {
   const t = translations[selectedLanguage as LanguageCode] || translations.nl;
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-4 animate-fade-in">
+    <div className="relative flex flex-col items-center justify-center h-full px-4 animate-fade-in z-10">
       <div className="relative mb-6">
         {/* Gradient Circle - Fixed colors */}
         <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-[#e32219] to-[#c01d15]
@@ -53,7 +53,7 @@ export const WelcomeScreen = ({ selectedLanguage }: WelcomeScreenProps) => {
           <span className="font-semibold">Levtor</span>
         </p>
         <p className="text-[10px] text-gray-300">
-          v1.0.8
+          v1.0.9
         </p>
       </div>
     </div>

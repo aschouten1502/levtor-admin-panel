@@ -6,7 +6,7 @@ export const LogoBackground = () => {
   const logos = Array.from({ length: logoCount }, (_, i) => i);
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
       {/* Warme gradient achtergrond */}
       <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-yellow-50" />
 

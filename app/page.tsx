@@ -283,7 +283,7 @@ export default function Home() {
   // RENDER
   // ========================================
   return (
-    <div className="min-h-screen w-screen overflow-x-hidden">
+    <div className="relative min-h-screen w-screen overflow-x-hidden">
       {/* Logo Background Pattern - Subtiel op achtergrond */}
       <LogoBackground />
 
@@ -296,8 +296,8 @@ export default function Home() {
       </div>
 
       {/* Chat Area - SCROLLABLE met padding voor header en input */}
-      <div className="relative w-full min-h-screen pt-[90px] pb-[120px] z-10 bg-gradient-to-br from-orange-50 via-white to-yellow-50">
-        <div className="relative w-full px-4 sm:px-6 py-6 z-20">
+      <div className="relative w-full min-h-screen pt-[90px] pb-[120px] z-10">
+        <div className="relative w-full px-4 sm:px-6 py-6">
           {/* Toon welkomstscherm als er nog geen messages zijn */}
           {messages.length === 0 ? (
             <WelcomeScreen selectedLanguage={selectedLanguage} />
