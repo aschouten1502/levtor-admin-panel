@@ -53,7 +53,7 @@ export const WelcomeScreen = ({ selectedLanguage }: WelcomeScreenProps) => {
           <span className="font-semibold">Levtor</span>
         </p>
         <p className="text-[10px] text-gray-300">
-          v1.0.2
+          v1.0.3
         </p>
       </div>
     </div>

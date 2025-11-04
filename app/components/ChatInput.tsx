@@ -38,8 +38,9 @@ export const ChatInput = ({ onSendMessage, disabled, selectedLanguage }: ChatInp
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.inputPlaceholder}
             disabled={disabled}
-            className="flex-1 bg-transparent outline-none text-sm sm:text-base text-gray-800
+            className="flex-1 bg-transparent outline-none text-base text-gray-800
                        placeholder:text-gray-400 disabled:opacity-50"
+            style={{ fontSize: '16px' }}
           />
           <button
             type="submit"
