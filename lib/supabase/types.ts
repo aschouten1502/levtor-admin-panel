@@ -20,11 +20,16 @@ export type Database = {
           blocked: boolean | null
           citations: Json | null
           citations_count: number | null
+          completion_error: string | null
           conversation_history_length: number | null
           created_at: string | null
           error_details: string | null
           event_type: string | null
+          feedback: string | null
+          feedback_comment: string | null
+          feedback_timestamp: string | null
           id: string
+          is_complete: boolean | null
           language: string | null
           openai_cost: number | null
           openai_input_tokens: number | null
@@ -39,17 +44,24 @@ export type Database = {
           snippets_used: number | null
           timestamp: string
           total_cost: number | null
+          update_attempts: number | null
+          updated_at: string | null
         }
         Insert: {
           answer: string
           blocked?: boolean | null
           citations?: Json | null
           citations_count?: number | null
+          completion_error?: string | null
           conversation_history_length?: number | null
           created_at?: string | null
           error_details?: string | null
           event_type?: string | null
+          feedback?: string | null
+          feedback_comment?: string | null
+          feedback_timestamp?: string | null
           id?: string
+          is_complete?: boolean | null
           language?: string | null
           openai_cost?: number | null
           openai_input_tokens?: number | null
@@ -64,17 +76,24 @@ export type Database = {
           snippets_used?: number | null
           timestamp?: string
           total_cost?: number | null
+          update_attempts?: number | null
+          updated_at?: string | null
         }
         Update: {
           answer?: string
           blocked?: boolean | null
           citations?: Json | null
           citations_count?: number | null
+          completion_error?: string | null
           conversation_history_length?: number | null
           created_at?: string | null
           error_details?: string | null
           event_type?: string | null
+          feedback?: string | null
+          feedback_comment?: string | null
+          feedback_timestamp?: string | null
           id?: string
+          is_complete?: boolean | null
           language?: string | null
           openai_cost?: number | null
           openai_input_tokens?: number | null
@@ -89,6 +108,8 @@ export type Database = {
           snippets_used?: number | null
           timestamp?: string
           total_cost?: number | null
+          update_attempts?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }

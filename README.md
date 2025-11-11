@@ -43,14 +43,14 @@ Alle documentatie staat in de **`/docs`** folder:
 | Document | Beschrijving |
 |----------|--------------|
 | **[docs/README.md](./docs/README.md)** | 📖 **START HIER** - Complete setup guide en overzicht |
-| **[docs/CLAUDE.md](./docs/CLAUDE.md)** | 🤖 Developer instructies voor Claude Code (AI assistent) |
-| **[PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)** | 🗂️ Uitleg van complete code structuur en flow |
+| **[CLAUDE.md](./CLAUDE.md)** | 🤖 Developer guide voor Claude Code (concise) |
+| **[PROJECT_INDEX.md](./PROJECT_INDEX.md)** | 📁 Complete project file index en navigation |
+| **[docs/guides/PROJECT_STRUCTURE.md](./docs/guides/PROJECT_STRUCTURE.md)** | 🗂️ Detailed code structuur en flow |
 | **[docs/SUPABASE.md](./docs/SUPABASE.md)** | 🗄️ Database setup, schema, en wat er gelogd wordt |
 | **[docs/SUPABASE_ANALYTICS.md](./docs/SUPABASE_ANALYTICS.md)** | 📊 SQL queries voor cost tracking en analytics |
+| **[docs/migrations/README.md](./docs/migrations/README.md)** | 💾 Database migrations index |
 | **[docs/SETUP_CHECKLIST.md](./docs/SETUP_CHECKLIST.md)** | ✅ Stap-voor-stap setup checklist |
 | **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** | 🚀 Deployment guide (Vercel/Netlify/Docker) |
-| **[lib/supabase/README.md](./lib/supabase/README.md)** | 💾 Supabase folder overzicht |
-| **[lib/supabase/SETUP.md](./lib/supabase/SETUP.md)** | ⚙️ Supabase setup instructies |
 
 ---
 

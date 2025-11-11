@@ -76,6 +76,7 @@ export async function logChatRequest(data: {
           blocked: data.blocked || false,
           event_type: data.event_type || 'chat_request',
           error_details: data.error_details || null,
+          is_complete: data.answer !== '[Streaming in progress...]', // Mark placeholder logs as incomplete
         },
       ])
       .select();
@@ -98,16 +99,20 @@ export async function logChatRequest(data: {
  * Update a chat request log in Supabase
  * Used to update placeholder logs after streaming completes
  */
-export async function updateChatRequest(logId: string, data: {
-  answer: string;
-  response_time_seconds: number;
-  response_time_ms: number;
-  openai_input_tokens: number;
-  openai_output_tokens: number;
-  openai_total_tokens: number;
-  openai_cost: number;
-  total_cost: number;
-}) {
+export async function updateChatRequest(
+  logId: string,
+  data: {
+    answer: string;
+    response_time_seconds: number;
+    response_time_ms: number;
+    openai_input_tokens: number;
+    openai_output_tokens: number;
+    openai_total_tokens: number;
+    openai_cost: number;
+    total_cost: number;
+  },
+  incrementAttempts: boolean = false
+) {
   // Skip if Supabase is not configured
   if (!supabase) {
     console.log('⏩ [Supabase] Update skipped - Supabase not configured');
@@ -117,23 +122,38 @@ export async function updateChatRequest(logId: string, data: {
   try {
     console.log('🔄 [Supabase] Updating log entry:', logId);
 
+    const updatePayload: any = {
+      answer: data.answer,
+      response_time_seconds: data.response_time_seconds,
+      response_time_ms: data.response_time_ms,
+      openai_input_tokens: data.openai_input_tokens,
+      openai_output_tokens: data.openai_output_tokens,
+      openai_total_tokens: data.openai_total_tokens,
+      openai_cost: data.openai_cost,
+      total_cost: data.total_cost,
+      is_complete: true, // Mark as complete when successfully updated
+    };
+
     const { data: updatedData, error } = await supabase
       .from('geostick_logs_data_qabothr')
-      .update({
-        answer: data.answer,
-        response_time_seconds: data.response_time_seconds,
-        response_time_ms: data.response_time_ms,
-        openai_input_tokens: data.openai_input_tokens,
-        openai_output_tokens: data.openai_output_tokens,
-        openai_total_tokens: data.openai_total_tokens,
-        openai_cost: data.openai_cost,
-        total_cost: data.total_cost,
-      })
+      .update(updatePayload)
       .eq('id', logId)
       .select();
 
     if (error) {
       console.error('❌ [Supabase] Failed to update log:', error);
+
+      // Log the error in the database if we can
+      if (incrementAttempts) {
+        await supabase
+          .from('geostick_logs_data_qabothr')
+          .update({
+            completion_error: error.message,
+          })
+          .eq('id', logId)
+          .select();
+      }
+
       return { success: false, error: error.message };
     }
 
@@ -141,8 +161,84 @@ export async function updateChatRequest(logId: string, data: {
     return { success: true, data: updatedData };
   } catch (error: any) {
     console.error('❌ [Supabase] Unexpected error while updating log:', error);
+
+    // Try to log the error in the database
+    if (incrementAttempts) {
+      try {
+        await supabase
+          .from('geostick_logs_data_qabothr')
+          .update({
+            completion_error: error.message,
+          })
+          .eq('id', logId)
+          .select();
+      } catch (innerError) {
+        console.error('❌ [Supabase] Failed to log error:', innerError);
+      }
+    }
+
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Update a chat request log with retry logic and exponential backoff
+ * Handles transient failures that occur after streaming completes
+ */
+export async function updateChatRequestWithRetry(
+  logId: string,
+  data: {
+    answer: string;
+    response_time_seconds: number;
+    response_time_ms: number;
+    openai_input_tokens: number;
+    openai_output_tokens: number;
+    openai_total_tokens: number;
+    openai_cost: number;
+    total_cost: number;
+  },
+  maxRetries: number = 3
+): Promise<{ success: boolean; error?: string; attempts?: number }> {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const result = await updateChatRequest(logId, data, true);
+
+    if (result.success) {
+      console.log(`✅ [Supabase] Log updated successfully on attempt ${attempt}/${maxRetries}`);
+      return { success: true, attempts: attempt };
+    }
+
+    lastError = result.error;
+
+    if (attempt < maxRetries) {
+      // Exponential backoff: 500ms, 1000ms, 2000ms
+      const delayMs = 500 * Math.pow(2, attempt - 1);
+      console.warn(
+        `⚠️ [Supabase] Update failed (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs}ms...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  console.error(
+    `❌ [Supabase] Failed to update log after ${maxRetries} attempts:`,
+    lastError
+  );
+
+  // Mark as permanently failed
+  try {
+    await supabase
+      ?.from('geostick_logs_data_qabothr')
+      .update({
+        completion_error: `Failed after ${maxRetries} retry attempts: ${lastError}`,
+      })
+      .eq('id', logId);
+  } catch (error) {
+    console.error('❌ [Supabase] Failed to mark log as failed:', error);
+  }
+
+  return { success: false, error: lastError, attempts: maxRetries };
 }
 
 /**

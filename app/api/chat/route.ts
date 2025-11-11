@@ -30,7 +30,7 @@ import {
   categorizeError,
   type RequestSummary
 } from '@/lib/logging';
-import { updateChatRequest } from '@/lib/supabase/supabase-client';
+import { updateChatRequestWithRetry } from '@/lib/supabase/supabase-client';
 
 // ========================================
 // MAIN API HANDLER
@@ -41,6 +41,10 @@ export async function POST(request: NextRequest) {
   const requestStartTime = Date.now();
   console.log('🚀 [API] Chat request received');
   console.log('⏱️  [API] Request start time:', new Date(requestStartTime).toISOString());
+
+  // Get waitUntil from NextRequest context (Vercel Edge/Serverless feature)
+  // @ts-ignore - waitUntil may not be in types yet
+  const waitUntil = request.waitUntil?.bind(request);
 
   // Initialiseer variabelen
   let message: string = '';
@@ -151,12 +155,15 @@ export async function POST(request: NextRequest) {
 
     // Voeg metadata toe aan de stream (citations, pinecone cost, session, logId!)
     const encoder = new TextEncoder();
+
+    // Shared variables voor de Supabase update (accessible outside stream)
+    let fullAnswer = '';
+    let finalUsage: any = null;
+    let streamComplete = false;
+    let streamError: Error | null = null;
+
     const transformedStream = new ReadableStream({
       async start(controller) {
-        // Track de finale data voor Supabase update
-        let fullAnswer = '';
-        let finalUsage: any = null;
-
         try {
           // Stuur eerst de metadata (citations, pinecone info, EN logId!)
           const metadataEvent = JSON.stringify({
@@ -176,88 +183,179 @@ export async function POST(request: NextRequest) {
 
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
 
-            // Decode de chunk om de data te extraheren
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            // Parse het chunk VOOR we checken of done
+            if (value) {
+              // Decode de chunk om de data te extraheren
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n');
 
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const eventData = JSON.parse(line.slice(6));
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const eventData = JSON.parse(line.slice(6));
 
-                  // Verzamel content voor fullAnswer
-                  if (eventData.type === 'content') {
-                    fullAnswer += eventData.content;
+                    // Verzamel content voor fullAnswer
+                    if (eventData.type === 'content') {
+                      fullAnswer += eventData.content;
+                    }
+
+                    // Verzamel usage voor Supabase update
+                    if (eventData.type === 'done') {
+                      finalUsage = eventData.usage;
+                      fullAnswer = eventData.fullAnswer || fullAnswer;
+                    }
+                  } catch (e) {
+                    // Parsing error, skip
                   }
-
-                  // Verzamel usage voor Supabase update
-                  if (eventData.type === 'done') {
-                    finalUsage = eventData.usage;
-                    fullAnswer = eventData.fullAnswer || fullAnswer;
-                  }
-                } catch (e) {
-                  // Parsing error, skip
                 }
               }
+
+              // Forward de chunk naar de client
+              controller.enqueue(value);
             }
 
-            // Forward de chunk naar de client
-            controller.enqueue(value);
+            // Check done NA het parsen
+            if (done) break;
           }
 
-          // Bereken timing
-          const requestEndTime = Date.now();
-          const responseTimeMs = requestEndTime - requestStartTime;
-          const responseTimeSeconds = parseFloat((responseTimeMs / 1000).toFixed(2));
-
-          console.log('\n⏱️  [API] ========== TIMING ==========');
-          console.log('⏱️  [API] Total response time:', responseTimeSeconds, 'seconds');
-
-          // Update de Supabase log met de echte data (non-blocking)
-          if (logId && finalUsage && fullAnswer) {
-            const totalCost = parseFloat(pineconeCost.toFixed(6)) + (finalUsage.totalCost || 0);
-
-            console.log('🔄 [API] Updating Supabase log with final data...');
-            updateChatRequest(logId, {
-              answer: fullAnswer,
-              response_time_seconds: responseTimeSeconds,
-              response_time_ms: responseTimeMs,
-              openai_input_tokens: finalUsage.inputTokens || 0,
-              openai_output_tokens: finalUsage.outputTokens || 0,
-              openai_total_tokens: finalUsage.totalTokens || 0,
-              openai_cost: finalUsage.totalCost || 0,
-              total_cost: totalCost
-            }).then(result => {
-              if (result.success) {
-                console.log('✅ [API] Supabase log updated successfully');
-              } else {
-                console.error('⚠️ [API] Failed to update Supabase log:', result.error);
-              }
-            }).catch(err => {
-              console.error('⚠️ [API] Error updating Supabase log:', err);
-            });
-          } else {
-            console.warn('⚠️ [API] Missing data for Supabase update:', {
-              hasLogId: !!logId,
-              hasUsage: !!finalUsage,
-              hasAnswer: !!fullAnswer
-            });
-          }
-
+          streamComplete = true;
           controller.close();
         } catch (error) {
           console.error('❌ [API] Streaming error:', error);
+          streamError = error instanceof Error ? error : new Error('Unknown streaming error');
+          streamComplete = true;
+
           const errorEvent = JSON.stringify({
             type: 'error',
-            message: error instanceof Error ? error.message : 'Streaming failed'
+            message: streamError.message
           });
           controller.enqueue(encoder.encode(`data: ${errorEvent}\n\n`));
           controller.close();
         }
       }
     });
+
+    // ========================================
+    // CRITICAL FIX: Gebruik waitUntil (Vercel) of schedule update AFTER response
+    // Dit garandeert dat de Supabase update uitgevoerd wordt, ook na stream close
+    // ========================================
+    const performSupabaseUpdate = async () => {
+      // Wacht tot stream compleet is (max 30 seconden)
+      const maxWaitTime = 30000;
+      const startWait = Date.now();
+
+      while (!streamComplete && (Date.now() - startWait) < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Bereken timing
+      const requestEndTime = Date.now();
+      const responseTimeMs = requestEndTime - requestStartTime;
+      const responseTimeSeconds = parseFloat((responseTimeMs / 1000).toFixed(2));
+
+      console.log('\n⏱️  [API] ========== TIMING ==========');
+      console.log('⏱️  [API] Total response time:', responseTimeSeconds, 'seconds');
+      console.log('⏱️  [API] Stream complete:', streamComplete);
+
+      if (!logId) {
+        console.error('❌ [API] No logId available for Supabase update');
+        return;
+      }
+
+      // Check if we had a streaming error
+      if (streamError) {
+        console.log('🔄 [API] Updating Supabase log with streaming error...');
+        try {
+          const result = await updateChatRequestWithRetry(logId, {
+            answer: `[STREAMING ERROR]: ${streamError.message}`,
+            response_time_seconds: responseTimeSeconds,
+            response_time_ms: responseTimeMs,
+            openai_input_tokens: 0,
+            openai_output_tokens: 0,
+            openai_total_tokens: 0,
+            openai_cost: 0,
+            total_cost: parseFloat(pineconeCost.toFixed(6))
+          }, 3);
+
+          if (result.success) {
+            console.log(`✅ [API] Error log updated (${result.attempts} attempt(s))`);
+          } else {
+            console.error(`❌ [API] Failed to update error log after ${result.attempts} attempts:`, result.error);
+          }
+        } catch (err) {
+          console.error('⚠️ [API] Error updating error log:', err);
+        }
+        return;
+      }
+
+      // Normal completion - update with full data
+      if (finalUsage && fullAnswer) {
+        const totalCost = parseFloat(pineconeCost.toFixed(6)) + (finalUsage.totalCost || 0);
+
+        console.log('🔄 [API] Updating Supabase log with final data (with retry)...');
+        try {
+          const result = await updateChatRequestWithRetry(logId, {
+            answer: fullAnswer,
+            response_time_seconds: responseTimeSeconds,
+            response_time_ms: responseTimeMs,
+            openai_input_tokens: finalUsage.inputTokens || 0,
+            openai_output_tokens: finalUsage.outputTokens || 0,
+            openai_total_tokens: finalUsage.totalTokens || 0,
+            openai_cost: finalUsage.totalCost || 0,
+            total_cost: totalCost
+          }, 3);
+
+          if (result.success) {
+            console.log(`✅ [API] Supabase log updated successfully (${result.attempts} attempt(s))`);
+          } else {
+            console.error(`❌ [API] Failed to update Supabase log after ${result.attempts} attempts:`, result.error);
+          }
+        } catch (err) {
+          console.error('⚠️ [API] Error updating Supabase log:', err);
+        }
+      } else {
+        // Incomplete data - still update to avoid "[Streaming in progress...]"
+        console.warn('⚠️ [API] Incomplete streaming data:', {
+          hasUsage: !!finalUsage,
+          hasAnswer: !!fullAnswer,
+          answerLength: fullAnswer.length
+        });
+
+        try {
+          console.log('🔄 [API] Updating Supabase log with incomplete data...');
+          const result = await updateChatRequestWithRetry(logId, {
+            answer: fullAnswer || '[ERROR]: No answer received from OpenAI',
+            response_time_seconds: responseTimeSeconds,
+            response_time_ms: responseTimeMs,
+            openai_input_tokens: finalUsage?.inputTokens || 0,
+            openai_output_tokens: finalUsage?.outputTokens || 0,
+            openai_total_tokens: finalUsage?.totalTokens || 0,
+            openai_cost: finalUsage?.totalCost || 0,
+            total_cost: parseFloat(pineconeCost.toFixed(6)) + (finalUsage?.totalCost || 0)
+          }, 3);
+
+          if (result.success) {
+            console.log(`✅ [API] Incomplete log updated (${result.attempts} attempt(s))`);
+          } else {
+            console.error(`❌ [API] Failed to update incomplete log after ${result.attempts} attempts:`, result.error);
+          }
+        } catch (err) {
+          console.error('⚠️ [API] Error updating incomplete log:', err);
+        }
+      }
+    };
+
+    // Use waitUntil if available (Vercel), otherwise run in background (best effort)
+    if (waitUntil) {
+      console.log('✅ [API] Using waitUntil for guaranteed Supabase update');
+      waitUntil(performSupabaseUpdate());
+    } else {
+      console.log('⚠️ [API] waitUntil not available, running update in background (best effort)');
+      performSupabaseUpdate().catch(err => {
+        console.error('❌ [API] Background update failed:', err);
+      });
+    }
 
     // Return streaming response
     return new Response(transformedStream, {
