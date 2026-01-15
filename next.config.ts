@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
     // Only use for temporary fixes - should resolve errors properly in production
     ignoreBuildErrors: false,
   },
+  // Empty turbopack config to acknowledge webpack config from PWA plugin
+  // Next.js 16 uses Turbopack by default, this silences the migration warning
+  turbopack: {},
   // Webpack configuration for Windows cache stability
   webpack: (config, { dev }) => {
     if (dev && isWindows) {
