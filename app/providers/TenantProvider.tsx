@@ -121,6 +121,10 @@ function injectCssVariables(config: TenantConfig): void {
   root.style.setProperty('--tenant-text-secondary', config.text_secondary || '#6B7280');
   root.style.setProperty('--tenant-text-tertiary', config.text_tertiary || '#9CA3AF');
 
+  // Scrollbar colors - subtle version of primary color
+  root.style.setProperty('--scrollbar-color', adjustColorBrightness(config.primary_color, 30));
+  root.style.setProperty('--scrollbar-color-hover', config.primary_color);
+
   console.log(`[TenantProvider] CSS variables injected for ${config.name}`);
 }
 

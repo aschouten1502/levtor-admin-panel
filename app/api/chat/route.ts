@@ -173,8 +173,8 @@ export async function POST(request: NextRequest) {
         answer: '[Streaming in progress...]', // Placeholder
         response_time_seconds: 0,
         response_time_ms: 0,
-        pinecone_tokens: ragTokens, // Now using Supabase RAG (embedding tokens)
-        pinecone_cost: parseFloat(ragCost.toFixed(6)), // Now using Supabase RAG cost
+        embedding_tokens: ragTokens, // Supabase pgvector embedding tokens
+        embedding_cost: parseFloat(ragCost.toFixed(6)), // Supabase pgvector embedding cost
         openai_input_tokens: 0, // Wordt later geupdate
         openai_output_tokens: 0,
         openai_total_tokens: 0,
@@ -214,12 +214,9 @@ export async function POST(request: NextRequest) {
             citations: citations,
             ragTokens: ragTokens,           // Supabase RAG embedding tokens
             ragCost: parseFloat(ragCost.toFixed(6)), // Supabase RAG cost
-            // Backwards compatibility - frontend may still expect these
-            pineconeTokens: ragTokens,
-            pineconeCost: parseFloat(ragCost.toFixed(6)),
             sessionId: sessionId || 'NO_SESSION_ID',
             requestStartTime: requestStartTime,
-            logId: logId  // ← NU HEBBEN WE EEN LOGID!
+            logId: logId
           });
           controller.enqueue(encoder.encode(`data: ${metadataEvent}\n\n`));
 

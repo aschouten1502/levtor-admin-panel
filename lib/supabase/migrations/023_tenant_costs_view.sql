@@ -20,7 +20,7 @@ WITH chat_costs AS (
     tenant_id,
     COUNT(*) as chat_count,
     COALESCE(SUM(total_cost), 0) as chat_total_cost,
-    COALESCE(SUM(pinecone_cost), 0) as embedding_cost,
+    COALESCE(SUM(embedding_cost), 0) as embedding_cost,
     COALESCE(SUM(openai_cost), 0) as openai_cost,
     -- Extract rerank cost from rag_details if available
     COALESCE(SUM((rag_details->'costs'->>'reranking')::numeric), 0) as rerank_cost,
@@ -152,7 +152,7 @@ BEGIN
       SELECT json_build_object(
         'count', COUNT(*),
         'costs', json_build_object(
-          'embedding', COALESCE(SUM(pinecone_cost), 0),
+          'embedding', COALESCE(SUM(embedding_cost), 0),
           'reranking', COALESCE(SUM((rag_details->'costs'->>'reranking')::numeric), 0),
           'translation', COALESCE(SUM((rag_details->'query'->'translation'->>'translationCost')::numeric), 0),
           'openai', COALESCE(SUM(openai_cost), 0),

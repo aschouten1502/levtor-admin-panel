@@ -156,48 +156,106 @@ const QUERY_EXPANSIONS: Record<string, string[]> = {
   'betaald': ['salaris', 'betaaldata', 'loon', 'uitbetaling'],
   'krijg': ['salaris', 'betaaldata', 'uitbetaling', 'ontvangen'],
   'wanneer krijg': ['betaaldata', 'salarisbetaling', 'uitbetaling', 'betaaldatum'],
-  'salaris': ['betaaldata', 'loon', 'uitbetaling', 'salarisstrook'],
+  'salaris': ['betaaldata', 'loon', 'uitbetaling', 'salarisstrook', 'functie-indeling'],
+  'loon': ['salaris', 'betaaldata', 'uitbetaling', 'functie-indeling'],
+  'inkomen': ['salaris', 'loon', 'betaling', 'uitbetaling'],
 
-  // Bonus / Extra uitkeringen / 1% regeling
-  'bonus': ['eenmalige bruto uitkering', '1%', 'extra uitkering', 'winstdeling', 'eindejaarsuitkering'],
-  '1%': ['eenmalige bruto uitkering', 'jaarlijkse uitkering', 'bonus', 'november oktober'],
-  '1 procent': ['eenmalige bruto uitkering', '1%', 'jaarlijkse uitkering'],
+  // Bonus / Extra uitkeringen / 1% regeling (CAO artikel 2.7)
+  'bonus': ['eenmalige bruto uitkering', '1%', 'extra uitkering', 'winstdeling', 'eindejaarsuitkering', 'artikel 2.7'],
+  '1%': ['eenmalige bruto uitkering', 'jaarlijkse uitkering', 'bonus', 'november oktober', 'artikel 2.7'],
+  '1 procent': ['eenmalige bruto uitkering', '1%', 'jaarlijkse uitkering', 'artikel 2.7'],
   'extra': ['bonus', 'eenmalige bruto uitkering', 'toeslag', 'extra uitkering'],
   'november': ['eenmalige bruto uitkering', '1%', 'oktober', 'jaarlijkse uitkering'],
   'uitkering': ['eenmalige bruto uitkering', '1%', 'bonus', 'vakantietoeslag'],
+  'bruto': ['eenmalige bruto uitkering', 'salaris', 'loon', 'uitkering'],
 
-  // Verlof / vakantie
-  'vrij': ['verlof', 'vakantie', 'vrije dagen', 'vakantiedagen'],
-  'vakantie': ['verlof', 'vakantiedagen', 'verlofaanvraag'],
-  'snipperdag': ['verlof', 'vakantiedagen', 'vrije dag'],
-  'verlof': ['vakantie', 'vakantiedagen', 'vrije dagen'],
+  // Verlof / vakantie (CAO hoofdstuk 4)
+  'vrij': ['verlof', 'vakantie', 'vrije dagen', 'vakantiedagen', 'roostervrije dagen'],
+  'vakantie': ['verlof', 'vakantiedagen', 'verlofaanvraag', 'vakantieplanning', 'vakantierechten'],
+  'snipperdag': ['verlof', 'vakantiedagen', 'vrije dag', 'roostervrije dag'],
+  'verlof': ['vakantie', 'vakantiedagen', 'vrije dagen', 'geboorteverlof', 'ouderschapsverlof'],
+  'vakantiegeld': ['vakantietoeslag', '8%', 'vakantie uitkering', 'artikel 2.6'],
+  'vakantietoeslag': ['vakantiegeld', '8%', 'vakantie uitkering'],
+  'feestdag': ['feestdagen', 'vrije dag', 'roostervrije dag', 'artikel 4.3'],
+  'feestdagen': ['nationale feestdag', 'vrije dagen', 'roostervrij'],
 
-  // Ziekte
-  'ziek': ['ziekmelding', 'ziekteverzuim', 'arbeidsongeschikt', 'verzuim'],
+  // Ziekte (CAO hoofdstuk 5)
+  'ziek': ['ziekmelding', 'ziekteverzuim', 'arbeidsongeschikt', 'verzuim', 'loondoorbetaling'],
   'griep': ['ziekmelding', 'ziekteverzuim'],
-  'ziekmelden': ['ziekmelding', 'verzuimprotocol'],
+  'ziekmelden': ['ziekmelding', 'verzuimprotocol', 'ziektemelding'],
+  'arbeidsongeschikt': ['ziekte', 'WGA', 'verzuim', 'loondoorbetaling'],
+  'herstel': ['hersteld', 'betermelden', 're-integratie'],
 
-  // Contract / werk
+  // Contract / arbeidsovereenkomst (CAO hoofdstuk 1)
   'contract': ['arbeidsovereenkomst', 'arbeidscontract', 'dienstverband'],
-  'ontslag': ['beëindiging', 'opzegtermijn', 'ontslagprocedure'],
-  'stoppen': ['opzegging', 'ontslag', 'beëindiging'],
+  'ontslag': ['beëindiging', 'opzegtermijn', 'ontslagprocedure', 'einde dienstverband'],
+  'stoppen': ['opzegging', 'ontslag', 'beëindiging', 'einde arbeidsovereenkomst'],
+  'opzeggen': ['opzegtermijn', 'beëindiging', 'ontslag'],
+  'proeftijd': ['proefperiode', 'arbeidsovereenkomst', 'contract'],
 
-  // Pensioen
-  'pensioen': ['pensioenregeling', 'AOW', 'pensioenfonds'],
-  'oud': ['pensioen', 'AOW', 'stoppen met werken'],
+  // Werktijden / arbeidsduur (CAO hoofdstuk 3)
+  'werktijd': ['arbeidsduur', 'werkuren', 'arbeidstijd', 'dagdienstvenster'],
+  'werkuren': ['arbeidsduur', 'werktijd', 'arbeidstijd'],
+  'uren': ['arbeidsduur', 'werktijd', 'werkuren', 'overwerk'],
+  'overwerk': ['overuren', 'meeruren', 'toeslagen', 'compensatie'],
+  'toeslag': ['toeslagen', 'overwerkvergoeding', 'onregelmatigheid'],
+  'nachtdienst': ['nachtwerk', 'toeslagen', 'onregelmatige werktijden'],
 
-  // Lease / auto
+  // Pensioen (CAO hoofdstuk 5/11)
+  'pensioen': ['pensioenregeling', 'AOW', 'pensioenfonds', 'pensioenopbouw'],
+  'oud': ['pensioen', 'AOW', 'stoppen met werken', 'vervroegd uittreden'],
+  'aow': ['pensioen', 'AOW-gerechtigde leeftijd', 'pensioenfonds'],
+  'vroegpensioen': ['vervroegd uittreden', 'RVU', 'eerder stoppen'],
+
+  // Lease / auto / mobiliteit
   'auto': ['leaseauto', 'lease regeling', 'mobiliteit'],
   'lease': ['leaseauto', 'mobiliteitsregeling', 'lease a bike'],
-  'fiets': ['lease a bike', 'fietsregeling', 'mobiliteit'],
+  'fiets': ['lease a bike', 'fietsregeling', 'mobiliteit', 'fietsplan'],
+  'reiskosten': ['reiskostenvergoeding', 'woon-werkverkeer', 'kilometervergoeding'],
+  'kilometer': ['reiskostenvergoeding', 'woon-werkverkeer', 'kilometervergoeding'],
+  'ov': ['openbaar vervoer', 'reiskosten', 'woon-werkverkeer'],
 
-  // Thuiswerken
-  'thuis': ['thuiswerken', 'hybride werken', 'remote'],
-  'remote': ['thuiswerken', 'hybride werken'],
+  // Thuiswerken / hybride werken
+  'thuis': ['thuiswerken', 'hybride werken', 'remote', 'thuiswerkvergoeding'],
+  'remote': ['thuiswerken', 'hybride werken', 'op afstand werken'],
+  'thuiswerkvergoeding': ['thuiswerken', 'vergoeding', 'hybride werken'],
 
-  // Algemene HR termen
-  'cao': ['collectieve arbeidsovereenkomst', 'arbeidsvoorwaarden'],
+  // CAO en arbeidsvoorwaarden
+  'cao': ['collectieve arbeidsovereenkomst', 'arbeidsvoorwaarden', 'grafimedia'],
   'regeling': ['beleid', 'procedure', 'richtlijn'],
+  'grafimedia': ['cao', 'collectieve arbeidsovereenkomst', 'grafische sector'],
+  'werkingssfeer': ['cao', 'van toepassing', 'grafimedia'],
+
+  // Functies en inschaling (CAO hoofdstuk 2)
+  'functie': ['functie-indeling', 'inschaling', 'functieschaal', 'functieniveau'],
+  'inschaling': ['functie-indeling', 'salaris', 'schaal', 'functieschaal'],
+  'schaal': ['salarisschaal', 'functie-indeling', 'inschaling'],
+  'promotie': ['functiewijziging', 'inschaling', 'salarisverhoging'],
+
+  // Sociale activiteiten / borrels / afdelingsuitjes
+  'borrel': ['afdelingsuitje', 'sociale activiteit', 'teamuitje', 'bedrijfsuitje', 'personeelsfeest'],
+  'borrels': ['afdelingsuitjes', 'sociale activiteiten', 'teamuitjes', 'bedrijfsuitjes'],
+  'drinks': ['borrel', 'afdelingsuitje', 'sociale activiteit'],
+  'na werktijd': ['buiten werktijd', 'afdelingsuitje', 'sociale activiteit'],
+  'feest': ['personeelsfeest', 'afdelingsuitje', 'bedrijfsfeest', 'sociale activiteit'],
+  'teamuitje': ['afdelingsuitje', 'sociale activiteit', 'teambuilding', 'bedrijfsuitje'],
+  'teambuilding': ['afdelingsuitje', 'teamuitje', 'sociale activiteit'],
+
+  // Opleiding / ontwikkeling (CAO hoofdstuk 7)
+  'opleiding': ['studie', 'ontwikkeling', 'cursus', 'loopbaanontwikkeling'],
+  'studie': ['opleiding', 'studiekosten', 'ontwikkeling'],
+  'training': ['opleiding', 'cursus', 'ontwikkeling'],
+  'cursus': ['opleiding', 'training', 'ontwikkeling'],
+
+  // Zwangerschap / ouderschap
+  'zwanger': ['zwangerschapsverlof', 'bevallingsverlof', 'ouderschapsverlof'],
+  'baby': ['geboorteverlof', 'ouderschapsverlof', 'bevallingsverlof'],
+  'kind': ['ouderschapsverlof', 'geboorteverlof', 'kinderopvang'],
+  'ouderschapsverlof': ['ouderschapsverlof', 'geboorteverlof', 'verlof'],
+
+  // Specifieke CAO artikelen als zoekterm
+  'artikel': ['cao', 'bepaling', 'regeling'],
+  'hoofdstuk': ['cao', 'onderdeel', 'sectie'],
 };
 
 /**
@@ -327,7 +385,7 @@ async function enhancedVectorSearch(
     p_query_embedding: `[${embedding.join(',')}]`,
     p_query_text: queryText,
     p_top_k: topK,
-    p_similarity_threshold: 0.40,
+    p_similarity_threshold: 0.30,
     p_vector_weight: 0.6,
     p_keyword_weight: 0.4
   });
@@ -408,7 +466,7 @@ async function singleVectorSearch(
     p_tenant_id: tenantId,
     p_query_embedding: `[${embedding.join(',')}]`,
     p_top_k: topK,
-    p_similarity_threshold: 0.45
+    p_similarity_threshold: 0.30  // Verlaagd van 0.45 om meer resultaten te vinden
   });
 
   if (error) {
@@ -508,7 +566,7 @@ function mergeAndRankResults(
 export async function retrieveContext(
   tenantId: string,
   userQuestion: string,
-  topK: number = 8,
+  topK: number = 12,  // Verhoogd van 8 voor meer context
   skipTenantValidation: boolean = false
 ): Promise<ContextResponseWithDetails> {
   const supabase = getSupabaseClient();
@@ -650,9 +708,10 @@ export async function retrieveContext(
   }
 
   // 3. Als enhanced search weinig resultaten geeft, supplement met multi-query
+  // AGRESSIEVER: Altijd multi-query gebruiken als er alternatieven zijn
   const totalResultsBeforeMerge = rawResults.length;
 
-  if (mergedResults.length < VECTOR_SEARCH_TOP_K / 2 && alternativeQueries.length > 0) {
+  if (mergedResults.length < VECTOR_SEARCH_TOP_K && alternativeQueries.length > 0) {
     console.log('\n🔄 [RAG] Supplementing with multi-query search...');
 
     const supplementPromises = alternativeQueries.slice(0, 2).map(async (query) => {
@@ -900,6 +959,7 @@ export async function retrieveContext(
     costs: {
       embedding: totalCost,
       reranking: rerankCost,
+      translation: translationCost,  // Translation cost (GPT-4o-mini)
       openai: 0, // Will be set by route.ts
       total: totalRAGCost
     },

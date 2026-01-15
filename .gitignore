@@ -1,5 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Claude Code / MCP
+.claude/
+.mcp.json
+
 # dependencies
 /node_modules
 /.pnp
@@ -54,4 +58,3 @@ next-env.d.ts
 **/public/fallback-*.js
 **/public/swe-worker-*.js
 **/public/swe-worker-*.js.map
-nul

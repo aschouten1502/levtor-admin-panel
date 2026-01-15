@@ -72,8 +72,10 @@ export default function CostsPage() {
   const totalCost = costs.reduce((sum, t) => sum + t.total_cost, 0);
   const totalDocCost = costs.reduce((sum, t) => sum + t.doc_costs.total, 0);
   const totalChatCost = costs.reduce((sum, t) => sum + t.chat_costs.total, 0);
+  const totalQACost = costs.reduce((sum, t) => sum + (t.qa_costs?.total || 0), 0);
   const totalDocs = costs.reduce((sum, t) => sum + t.document_count, 0);
   const totalChats = costs.reduce((sum, t) => sum + t.chat_count, 0);
+  const totalQATests = costs.reduce((sum, t) => sum + (t.qa_test_count || 0), 0);
 
   if (loading) {
     return (
@@ -119,7 +121,7 @@ export default function CostsPage() {
         </div>
 
         {/* Global Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-500">Totale Kosten</div>
             <div className="text-2xl font-bold text-gray-900">{formatCost(totalCost)}</div>
@@ -133,12 +135,20 @@ export default function CostsPage() {
             <div className="text-2xl font-bold text-green-600">{formatCost(totalChatCost)}</div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-500">QA Test Kosten</div>
+            <div className="text-2xl font-bold text-purple-600">{formatCost(totalQACost)}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-500">Documenten</div>
             <div className="text-2xl font-bold text-gray-900">{totalDocs}</div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-500">Chats</div>
             <div className="text-2xl font-bold text-gray-900">{totalChats}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-500">QA Tests</div>
+            <div className="text-2xl font-bold text-gray-900">{totalQATests}</div>
           </div>
         </div>
 
@@ -149,22 +159,28 @@ export default function CostsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tenant
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Docs
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Chats
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      QA
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Doc Cost
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Chat Cost
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      QA Cost
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
                     </th>
                   </tr>
@@ -172,7 +188,7 @@ export default function CostsPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {costs.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
                         Geen tenants gevonden
                       </td>
                     </tr>
@@ -185,7 +201,7 @@ export default function CostsPage() {
                           selectedTenant === tenant.tenant_id ? 'bg-blue-50' : ''
                         }`}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className={`w-2 h-2 rounded-full mr-2 ${tenant.is_active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                             <div>
@@ -194,20 +210,34 @@ export default function CostsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{tenant.document_count}</div>
                           <div className="text-xs text-gray-500">{tenant.total_pages} pag</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                           {tenant.chat_count}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{tenant.qa_test_count || 0}</div>
+                          {tenant.qa_latest_score !== null && (
+                            <div className={`text-xs font-medium ${
+                              (tenant.qa_latest_score || 0) >= 80 ? 'text-green-600' :
+                              (tenant.qa_latest_score || 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                              {tenant.qa_latest_score?.toFixed(0)}%
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <div className="text-sm text-blue-600 font-medium">{formatCost(tenant.doc_costs.total)}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <div className="text-sm text-green-600 font-medium">{formatCost(tenant.chat_costs.total)}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm text-purple-600 font-medium">{formatCost(tenant.qa_costs?.total || 0)}</div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <div className="text-sm font-bold text-gray-900">{formatCost(tenant.total_cost)}</div>
                         </td>
                       </tr>
@@ -308,6 +338,49 @@ export default function CostsPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* QA Tests Costs */}
+                    {tenantDetails.qa_tests && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                          <span className="mr-2">🧪</span> QA Testing
+                        </h3>
+                        <div className="bg-purple-50 rounded-lg p-3 space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Total Tests:</span>
+                            <span className="font-medium">{tenantDetails.qa_tests.count}</span>
+                          </div>
+                          {tenantDetails.qa_tests.latest_score !== null && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Latest Score:</span>
+                              <span className={`font-medium ${
+                                (tenantDetails.qa_tests.latest_score || 0) >= 80 ? 'text-green-600' :
+                                (tenantDetails.qa_tests.latest_score || 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
+                                {tenantDetails.qa_tests.latest_score?.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                          <hr className="my-2 border-purple-200" />
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Generation:</span>
+                            <span>{formatCost(tenantDetails.qa_tests.costs.generation)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Execution:</span>
+                            <span>{formatCost(tenantDetails.qa_tests.costs.execution)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Evaluation:</span>
+                            <span>{formatCost(tenantDetails.qa_tests.costs.evaluation)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-purple-700 pt-1">
+                            <span>Total:</span>
+                            <span>{formatCost(tenantDetails.qa_tests.costs.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Total */}
                     <div className="border-t pt-4">

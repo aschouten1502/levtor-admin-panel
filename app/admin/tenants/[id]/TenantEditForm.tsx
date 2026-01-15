@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tenant } from '@/lib/admin/tenant-service';
 
@@ -15,6 +15,73 @@ export default function TenantEditForm({ tenant }: TenantEditFormProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Refs for modal focus management
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmDeleteRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-dismiss success message after 5 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Stable ESC key handler (avoids memory leak from stale closures)
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape' && !isDeleting) {
+      setShowDeleteConfirm(false);
+    }
+  }, [isDeleting]);
+
+  // Focus trap handler for modal accessibility
+  const handleFocusTrap = useCallback((e: KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+
+    const firstElement = cancelButtonRef.current;
+    const lastElement = confirmDeleteRef.current;
+
+    if (!firstElement || !lastElement) return;
+
+    if (e.shiftKey) {
+      // Shift+Tab: if on first element, go to last
+      if (document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement.focus();
+      }
+    } else {
+      // Tab: if on last element, go to first
+      if (document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement.focus();
+      }
+    }
+  }, []);
+
+  // Focus management, ESC key, and focus trap for delete modal
+  useEffect(() => {
+    if (showDeleteConfirm) {
+      // Focus cancel button when modal opens
+      cancelButtonRef.current?.focus();
+
+      // Use stable handler references to prevent listener accumulation
+      document.addEventListener('keydown', handleEscape);
+      document.addEventListener('keydown', handleFocusTrap);
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+        document.removeEventListener('keydown', handleFocusTrap);
+      };
+    }
+  }, [showDeleteConfirm, handleEscape, handleFocusTrap]);
+
+  // Close modal and return focus to delete button
+  const closeDeleteModal = useCallback(() => {
+    setShowDeleteConfirm(false);
+    // Use requestAnimationFrame for reliable focus after React state update
+    requestAnimationFrame(() => deleteButtonRef.current?.focus());
+  }, []);
 
   const [formData, setFormData] = useState({
     name: tenant.name,
@@ -86,7 +153,7 @@ export default function TenantEditForm({ tenant }: TenantEditFormProps) {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
-      setShowDeleteConfirm(false);
+      closeDeleteModal();
     } finally {
       setIsDeleting(false);
     }
@@ -273,6 +340,7 @@ export default function TenantEditForm({ tenant }: TenantEditFormProps) {
       <div className="flex items-center justify-between pt-4 border-t border-gray-200">
         <button
           type="button"
+          ref={deleteButtonRef}
           onClick={() => setShowDeleteConfirm(true)}
           className="text-red-600 hover:text-red-800 text-sm font-medium"
         >
@@ -289,23 +357,40 @@ export default function TenantEditForm({ tenant }: TenantEditFormProps) {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+          aria-describedby="delete-modal-description"
+          onClick={(e) => {
+            // Close on backdrop click (not when clicking modal content)
+            if (e.target === e.currentTarget && !isDeleting) {
+              closeDeleteModal();
+            }
+          }}
+        >
           <div className="bg-white rounded-xl p-6 max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Tenant?</h3>
-            <p className="text-gray-600 mb-6">
+            <h3 id="delete-modal-title" className="text-lg font-semibold text-gray-900 mb-2">
+              Delete Tenant?
+            </h3>
+            <p id="delete-modal-description" className="text-gray-600 mb-6">
               This will permanently delete <strong>{tenant.name}</strong> and all associated data
               including documents, chat logs, and settings. This action cannot be undone.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                ref={cancelButtonRef}
+                onClick={closeDeleteModal}
+                disabled={isDeleting}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                ref={confirmDeleteRef}
                 onClick={handleDelete}
                 disabled={isDeleting}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50"

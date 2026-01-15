@@ -280,6 +280,9 @@ export function getTenantCssVariables(config: TenantConfig): Record<string, stri
     '--tenant-text-primary': config.text_primary || '#111827',
     '--tenant-text-secondary': config.text_secondary || '#6B7280',
     '--tenant-text-tertiary': config.text_tertiary || '#9CA3AF',
+    // Scrollbar colors - use primary color with adjusted opacity/brightness
+    '--scrollbar-color': adjustColorBrightness(config.primary_color, 30),  // Lighter version
+    '--scrollbar-color-hover': config.primary_color,  // Full color on hover
   };
 }
 

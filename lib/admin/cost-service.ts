@@ -40,13 +40,27 @@ export interface TenantCostSummary {
     total: number;
   };
 
+  // QA Test stats (v2.3)
+  qa_test_count: number;
+  qa_latest_score: number | null;
+
+  // QA Test costs breakdown (v2.3)
+  qa_costs: {
+    generation: number;
+    execution: number;
+    evaluation: number;
+    total: number;
+  };
+
   // Totals
   total_cost: number;
   avg_cost_per_chat: number;
   avg_cost_per_document: number;
+  avg_cost_per_qa_test: number;
 
   // Activity
   last_activity: string | null;
+  last_qa_test: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -91,6 +105,26 @@ export interface TenantCostDetails {
     };
     avg_response_time_ms: number;
     last_chat: string | null;
+  };
+
+  // QA Tests (v2.3)
+  qa_tests: {
+    count: number;
+    latest_score: number | null;
+    costs: {
+      generation: number;
+      execution: number;
+      evaluation: number;
+      total: number;
+    };
+    last_test: string | null;
+    recent_tests: Array<{
+      id: string;
+      overall_score: number | null;
+      total_questions: number;
+      cost: number;
+      completed_at: string;
+    }>;
   };
 
   total_cost: number;
@@ -154,10 +188,21 @@ export async function getAllTenantCosts(): Promise<TenantCostSummary[]> {
         openai: row.chat_openai_cost || 0,
         total: row.chat_total_cost || 0
       },
+      // QA Test costs (v2.3)
+      qa_test_count: row.qa_test_count || 0,
+      qa_latest_score: row.qa_latest_score || null,
+      qa_costs: {
+        generation: row.qa_generation_cost || 0,
+        execution: row.qa_execution_cost || 0,
+        evaluation: row.qa_evaluation_cost || 0,
+        total: row.qa_total_cost || 0
+      },
       total_cost: row.total_cost || 0,
       avg_cost_per_chat: row.avg_cost_per_chat || 0,
       avg_cost_per_document: row.avg_cost_per_document || 0,
+      avg_cost_per_qa_test: row.avg_cost_per_qa_test || 0,
       last_activity: row.last_activity,
+      last_qa_test: row.last_qa_test || null,
       is_active: row.is_active,
       created_at: row.created_at
     }));
@@ -194,13 +239,20 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
   // Haal chat logs op
   const { data: chatLogs } = await supabase
     .from('chat_logs')
-    .select('tenant_id, total_cost, pinecone_cost, openai_cost, rag_details, created_at')
+    .select('tenant_id, total_cost, embedding_cost, openai_cost, rag_details, created_at')
     .not('tenant_id', 'is', null);
+
+  // Haal QA test runs op (v2.3)
+  const { data: qaTestRuns } = await supabase
+    .from('qa_test_runs')
+    .select('tenant_id, total_cost, cost_breakdown, overall_score, completed_at, status')
+    .eq('status', 'completed');
 
   // Aggregeer per tenant
   return tenants.map(tenant => {
     const tenantDocs = docLogs?.filter(d => d.tenant_id === tenant.id) || [];
     const tenantChats = chatLogs?.filter(c => c.tenant_id === tenant.id) || [];
+    const tenantQATests = qaTestRuns?.filter(q => q.tenant_id === tenant.id) || [];
 
     const docStats = {
       count: tenantDocs.length,
@@ -215,13 +267,14 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
 
     const chatStats = {
       count: tenantChats.length,
-      embedding: tenantChats.reduce((sum, c) => sum + (c.pinecone_cost || 0), 0),
+      embedding: tenantChats.reduce((sum, c) => sum + (c.embedding_cost || 0), 0),
       reranking: tenantChats.reduce((sum, c) => {
         const rerankCost = c.rag_details?.costs?.reranking || 0;
         return sum + rerankCost;
       }, 0),
       translation: tenantChats.reduce((sum, c) => {
-        const transCost = c.rag_details?.query?.translation?.translationCost || 0;
+        // Prefer costs.translation (new), fallback to query.translation.translationCost (legacy)
+        const transCost = c.rag_details?.costs?.translation ?? c.rag_details?.query?.translation?.translationCost ?? 0;
         return sum + transCost;
       }, 0),
       openai: tenantChats.reduce((sum, c) => sum + (c.openai_cost || 0), 0),
@@ -229,7 +282,22 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
       lastAt: tenantChats.length > 0 ? tenantChats[0].created_at : null
     };
 
-    const totalCost = docStats.total + chatStats.total;
+    // QA Test stats (v2.3)
+    const latestQATest = tenantQATests.sort((a, b) =>
+      new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime()
+    )[0];
+
+    const qaStats = {
+      count: tenantQATests.length,
+      latestScore: latestQATest?.overall_score || null,
+      generation: tenantQATests.reduce((sum, q) => sum + (q.cost_breakdown?.generation || 0), 0),
+      execution: tenantQATests.reduce((sum, q) => sum + (q.cost_breakdown?.execution || 0), 0),
+      evaluation: tenantQATests.reduce((sum, q) => sum + (q.cost_breakdown?.evaluation || 0), 0),
+      total: tenantQATests.reduce((sum, q) => sum + (q.total_cost || 0), 0),
+      lastAt: latestQATest?.completed_at || null
+    };
+
+    const totalCost = docStats.total + chatStats.total + qaStats.total;
 
     return {
       tenant_id: tenant.id,
@@ -251,12 +319,23 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
         openai: chatStats.openai,
         total: chatStats.total
       },
+      // QA Test costs (v2.3)
+      qa_test_count: qaStats.count,
+      qa_latest_score: qaStats.latestScore,
+      qa_costs: {
+        generation: qaStats.generation,
+        execution: qaStats.execution,
+        evaluation: qaStats.evaluation,
+        total: qaStats.total
+      },
       total_cost: totalCost,
       avg_cost_per_chat: chatStats.count > 0 ? chatStats.total / chatStats.count : 0,
       avg_cost_per_document: docStats.count > 0 ? docStats.total / docStats.count : 0,
-      last_activity: docStats.lastAt && chatStats.lastAt
-        ? (new Date(docStats.lastAt) > new Date(chatStats.lastAt) ? docStats.lastAt : chatStats.lastAt)
-        : (docStats.lastAt || chatStats.lastAt),
+      avg_cost_per_qa_test: qaStats.count > 0 ? qaStats.total / qaStats.count : 0,
+      last_activity: [docStats.lastAt, chatStats.lastAt, qaStats.lastAt]
+        .filter(Boolean)
+        .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0] || null,
+      last_qa_test: qaStats.lastAt,
       is_active: tenant.is_active,
       created_at: tenant.created_at
     };
@@ -310,12 +389,25 @@ async function getTenantCostDetailsFallback(tenantId: string): Promise<TenantCos
   // Chat logs
   const { data: chatLogs } = await supabase
     .from('chat_logs')
-    .select('total_cost, pinecone_cost, openai_cost, rag_details, response_time_ms, created_at')
+    .select('total_cost, embedding_cost, openai_cost, rag_details, response_time_ms, created_at')
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
 
+  // QA test runs (v2.3)
+  const { data: qaTestRuns } = await supabase
+    .from('qa_test_runs')
+    .select('id, total_cost, cost_breakdown, overall_score, total_questions, completed_at')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false });
+
   const documents = docLogs || [];
   const chats = chatLogs || [];
+  const qaTests = qaTestRuns || [];
+
+  const docTotalCost = documents.reduce((sum, d) => sum + (d.total_cost || 0), 0);
+  const chatTotalCost = chats.reduce((sum, c) => sum + (c.total_cost || 0), 0);
+  const qaTotalCost = qaTests.reduce((sum, q) => sum + (q.total_cost || 0), 0);
 
   return {
     tenant_id: tenant.id,
@@ -328,7 +420,7 @@ async function getTenantCostDetailsFallback(tenantId: string): Promise<TenantCos
         chunking: documents.reduce((sum, d) => sum + (d.chunking_cost || 0), 0),
         embedding: documents.reduce((sum, d) => sum + (d.embedding_cost || 0), 0),
         metadata: documents.reduce((sum, d) => sum + (d.metadata_cost || 0), 0),
-        total: documents.reduce((sum, d) => sum + (d.total_cost || 0), 0)
+        total: docTotalCost
       },
       documents: documents.map(d => ({
         filename: d.filename,
@@ -347,20 +439,37 @@ async function getTenantCostDetailsFallback(tenantId: string): Promise<TenantCos
     chats: {
       count: chats.length,
       costs: {
-        embedding: chats.reduce((sum, c) => sum + (c.pinecone_cost || 0), 0),
+        embedding: chats.reduce((sum, c) => sum + (c.embedding_cost || 0), 0),
         reranking: chats.reduce((sum, c) => sum + (c.rag_details?.costs?.reranking || 0), 0),
         translation: chats.reduce((sum, c) => sum + (c.rag_details?.query?.translation?.translationCost || 0), 0),
         openai: chats.reduce((sum, c) => sum + (c.openai_cost || 0), 0),
-        total: chats.reduce((sum, c) => sum + (c.total_cost || 0), 0)
+        total: chatTotalCost
       },
       avg_response_time_ms: chats.length > 0
         ? chats.reduce((sum, c) => sum + (c.response_time_ms || 0), 0) / chats.length
         : 0,
       last_chat: chats.length > 0 ? chats[0].created_at : null
     },
-    total_cost:
-      documents.reduce((sum, d) => sum + (d.total_cost || 0), 0) +
-      chats.reduce((sum, c) => sum + (c.total_cost || 0), 0)
+    // QA Tests (v2.3)
+    qa_tests: {
+      count: qaTests.length,
+      latest_score: qaTests.length > 0 ? qaTests[0].overall_score : null,
+      costs: {
+        generation: qaTests.reduce((sum, q) => sum + (q.cost_breakdown?.generation || 0), 0),
+        execution: qaTests.reduce((sum, q) => sum + (q.cost_breakdown?.execution || 0), 0),
+        evaluation: qaTests.reduce((sum, q) => sum + (q.cost_breakdown?.evaluation || 0), 0),
+        total: qaTotalCost
+      },
+      last_test: qaTests.length > 0 ? qaTests[0].completed_at : null,
+      recent_tests: qaTests.slice(0, 5).map(q => ({
+        id: q.id,
+        overall_score: q.overall_score,
+        total_questions: q.total_questions,
+        cost: q.total_cost || 0,
+        completed_at: q.completed_at
+      }))
+    },
+    total_cost: docTotalCost + chatTotalCost + qaTotalCost
   };
 }
 

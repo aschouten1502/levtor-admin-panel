@@ -26,8 +26,8 @@ export interface ChatLog {
   language?: string;
   response_time_seconds?: number;
   response_time_ms?: number;
-  pinecone_tokens?: number;
-  pinecone_cost?: number;
+  embedding_tokens?: number;
+  embedding_cost?: number;
   openai_input_tokens?: number;
   openai_output_tokens?: number;
   openai_total_tokens?: number;
@@ -55,6 +55,14 @@ export interface RAGDetails {
     expanded?: string;
     alternativeQueries?: string[];
     expansionTerms?: string[];
+    translation?: {
+      originalLanguage?: string;
+      translatedQuery?: string;
+      targetLanguage?: string;
+      wasTranslated?: boolean;
+      translationCost?: number;
+      translationLatencyMs?: number;
+    };
   };
   search?: {
     type: string;
@@ -110,6 +118,7 @@ export interface RAGDetails {
   costs?: {
     embedding: number;
     reranking: number;
+    translation?: number;  // Query translation cost (GPT-4o-mini)
     openai: number;
     total: number;
   };

@@ -22,6 +22,21 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+  // Security headers voor embed route
+  async headers() {
+    return [
+      {
+        // Embed route: sta iframe embedding toe op externe websites
+        source: '/embed/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' *",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 // PWA Configuration

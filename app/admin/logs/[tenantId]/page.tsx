@@ -1079,7 +1079,7 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
               {ragDetails.costs && (
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-4">Cost Breakdown</h3>
-                  <div className="grid grid-cols-4 gap-4 text-center">
+                  <div className="grid grid-cols-5 gap-4 text-center">
                     <div>
                       <p className="text-lg font-bold text-gray-900">{formatCost(ragDetails.costs.embedding)}</p>
                       <p className="text-xs text-gray-500">Embedding</p>
@@ -1087,6 +1087,10 @@ function LogDetailModal({ log, onClose }: LogDetailModalProps) {
                     <div>
                       <p className="text-lg font-bold text-gray-900">{formatCost(ragDetails.costs.reranking)}</p>
                       <p className="text-xs text-gray-500">Reranking</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900">{formatCost(ragDetails.costs?.translation ?? ragDetails.query?.translation?.translationCost ?? 0)}</p>
+                      <p className="text-xs text-gray-500">Translation</p>
                     </div>
                     <div>
                       <p className="text-lg font-bold text-gray-900">{formatCost(ragDetails.costs.openai)}</p>

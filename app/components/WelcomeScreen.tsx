@@ -86,7 +86,7 @@ export const WelcomeScreen = ({ selectedLanguage }: WelcomeScreenProps) => {
 
       {/* Powered by + Version - Conditional based on tenant setting or feature flag */}
       {showPoweredBy && (
-        <div className="mt-8 mb-4 flex flex-col items-center gap-1">
+        <div className="mt-8 mb-4 flex flex-col items-center gap-1 welcome-powered-by" data-powered-by="true">
           <p className="text-xs text-gray-400 flex items-center gap-1.5">
             <span>Powered by</span>
             <span className="font-semibold">Levtor</span>

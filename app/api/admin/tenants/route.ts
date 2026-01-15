@@ -43,6 +43,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Server-side validation
+    // Email validation
+    if (body.contact_email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.contact_email)) {
+        return NextResponse.json(
+          { error: 'Invalid email format' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Color validation
+    const colorRegex = /^#[0-9A-Fa-f]{6}$/;
+    if (body.primary_color && !colorRegex.test(body.primary_color)) {
+      return NextResponse.json(
+        { error: 'Invalid primary color format (use #RRGGBB)' },
+        { status: 400 }
+      );
+    }
+    if (body.secondary_color && !colorRegex.test(body.secondary_color)) {
+      return NextResponse.json(
+        { error: 'Invalid secondary color format (use #RRGGBB)' },
+        { status: 400 }
+      );
+    }
+
+    // URL validation
+    if (body.website_url) {
+      try {
+        new URL(body.website_url);
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid website URL' },
+          { status: 400 }
+        );
+      }
+    }
+
     const input: TenantCreateInput = {
       id: body.id,
       name: body.name,
@@ -51,6 +90,7 @@ export async function POST(request: NextRequest) {
       secondary_color: body.secondary_color,
       welcome_message: body.welcome_message,
       contact_email: body.contact_email,
+      is_demo: body.is_demo ?? false,  // FIX: was missing!
       // Multilingual RAG support (v2.2)
       document_language: body.document_language || 'nl',
       website_url: body.website_url || null,

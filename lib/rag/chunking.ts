@@ -39,11 +39,12 @@ import { semanticChunk } from './semantic-chunker';
  * Alle features enabled voor maximale kwaliteit
  */
 const DEFAULT_SMART_OPTIONS: SmartChunkingOptions = {
-  // Grotere chunks dan legacy (1000 → 1500)
-  targetChunkSize: 1500,
-  minChunkSize: 200,
-  maxChunkSize: 2500,
-  overlapPercentage: 15,
+  // VERHOOGD: Grotere chunks voor betere context bij juridische documenten
+  // 1500 → 3000 chars (~500-800 woorden) voor CAO artikelen etc.
+  targetChunkSize: 3000,
+  minChunkSize: 500,       // Was 200 - voorkomt te kleine fragmenten
+  maxChunkSize: 4000,      // Was 2500 - ruimte voor volledige artikelen
+  overlapPercentage: 20,   // Was 15 - meer overlap voor context
 
   // Alle 4 opties enabled
   enableStructureDetection: true,

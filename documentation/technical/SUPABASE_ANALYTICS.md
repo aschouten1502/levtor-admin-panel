@@ -73,7 +73,7 @@ SELECT
   COUNT(*) AS total_requests,
   SUM(total_cost) AS total_cost_today,
   AVG(total_cost) AS avg_cost_per_request,
-  SUM(pinecone_cost) AS pinecone_total,
+  SUM(embedding_cost) AS pinecone_total,
   SUM(openai_cost) AS openai_total
 FROM "Geostick_Logs_Data_QABOTHR"
 WHERE DATE(timestamp) = CURRENT_DATE
@@ -88,7 +88,7 @@ SELECT
   COUNT(*) AS requests,
   ROUND(SUM(total_cost)::NUMERIC, 4) AS daily_cost,
   ROUND(AVG(total_cost)::NUMERIC, 6) AS avg_cost,
-  ROUND(SUM(pinecone_cost)::NUMERIC, 4) AS pinecone_cost,
+  ROUND(SUM(embedding_cost)::NUMERIC, 4) AS embedding_cost,
   ROUND(SUM(openai_cost)::NUMERIC, 4) AS openai_cost
 FROM "Geostick_Logs_Data_QABOTHR"
 WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days'
@@ -105,7 +105,7 @@ SELECT
   question,
   LEFT(answer, 100) || '...' AS answer_preview,
   total_cost,
-  pinecone_tokens,
+  embedding_tokens,
   openai_total_tokens,
   response_time_seconds
 FROM "Geostick_Logs_Data_QABOTHR"
@@ -123,7 +123,7 @@ SELECT
   ROUND(SUM(total_cost)::NUMERIC, 4) AS total_cost,
   ROUND(AVG(total_cost)::NUMERIC, 6) AS avg_cost_per_request,
   ROUND(SUM(openai_cost)::NUMERIC, 4) AS openai_cost,
-  ROUND(SUM(pinecone_cost)::NUMERIC, 4) AS pinecone_cost
+  ROUND(SUM(embedding_cost)::NUMERIC, 4) AS embedding_cost
 FROM "Geostick_Logs_Data_QABOTHR"
 WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days'
   AND event_type = 'chat_request'
@@ -175,7 +175,7 @@ SELECT
   question,
   response_time_seconds,
   total_cost,
-  pinecone_tokens,
+  embedding_tokens,
   openai_total_tokens,
   language
 FROM "Geostick_Logs_Data_QABOTHR"
@@ -191,8 +191,8 @@ LIMIT 20;
 SELECT
   COUNT(*) AS requests,
   -- Pinecone
-  ROUND(AVG(pinecone_tokens)::NUMERIC, 0) AS avg_pinecone_tokens,
-  MAX(pinecone_tokens) AS max_pinecone_tokens,
+  ROUND(AVG(embedding_tokens)::NUMERIC, 0) AS avg_embedding_tokens,
+  MAX(embedding_tokens) AS max_embedding_tokens,
   -- OpenAI
   ROUND(AVG(openai_input_tokens)::NUMERIC, 0) AS avg_openai_input,
   ROUND(AVG(openai_output_tokens)::NUMERIC, 0) AS avg_openai_output,

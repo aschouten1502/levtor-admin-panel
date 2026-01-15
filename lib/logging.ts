@@ -12,7 +12,7 @@
  * Alle logs zijn gestructureerd en makkelijk te zoeken/filteren.
  */
 
-import { Citation } from './pinecone';
+import { Citation } from './rag';
 import { logChatRequest, logErrorEvent, logContentFilterEvent } from './supabase/supabase-client';
 
 // ========================================
@@ -30,8 +30,8 @@ export interface RequestSummary {
   answer: string;
   response_time_seconds: number;
   response_time_ms: number;
-  pinecone_tokens: number;
-  pinecone_cost: number;
+  embedding_tokens: number;
+  embedding_cost: number;
   openai_input_tokens: number;
   openai_output_tokens: number;
   openai_total_tokens: number;
@@ -49,7 +49,7 @@ export interface RequestSummary {
  * Error categorieën voor betere diagnostics
  */
 export type ErrorCategory =
-  | 'PINECONE_ERROR'
+  | 'RAG_ERROR'
   | 'OPENAI_ERROR'
   | 'NETWORK_ERROR'
   | 'TIMEOUT_ERROR'
@@ -134,9 +134,9 @@ export function categorizeError(error: any): { category: ErrorCategory; source: 
   const errorMessage = error?.message?.toLowerCase() || '';
   const errorCode = error?.code || '';
 
-  if (errorMessage.includes('pinecone') || errorMessage.includes('assistant')) {
-    category = 'PINECONE_ERROR';
-    source = 'Pinecone API';
+  if (errorMessage.includes('rag') || errorMessage.includes('embedding') || errorMessage.includes('vector') || errorMessage.includes('supabase')) {
+    category = 'RAG_ERROR';
+    source = 'RAG System';
   } else if (errorMessage.includes('openai') || errorCode === 'insufficient_quota') {
     category = 'OPENAI_ERROR';
     source = 'OpenAI API';
@@ -339,7 +339,7 @@ export function logContentFilter(
  */
 export function getUserFriendlyErrorMessage(category: ErrorCategory): string {
   switch (category) {
-    case 'PINECONE_ERROR':
+    case 'RAG_ERROR':
       return 'Er is een probleem met het ophalen van HR documentatie. Probeer het over een moment opnieuw.';
     case 'OPENAI_ERROR':
       return 'Er is een probleem met het genereren van een antwoord. Probeer het opnieuw.';

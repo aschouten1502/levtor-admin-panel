@@ -58,8 +58,8 @@ Alle chat requests, errors en content filter events worden hier opgeslagen.
 | **question** | TEXT | User vraag | `Hoeveel vakantiedagen heb ik?` |
 | **answer** | TEXT | Bot antwoord | `Volgens artikel 12...` |
 | **language** | VARCHAR(10) | Taal code | `nl`, `en`, `pl` |
-| **pinecone_tokens** | INTEGER | Pinecone tokens | `1234` |
-| **pinecone_cost** | DECIMAL(10,6) | Pinecone kosten ($) | `0.006170` |
+| **embedding_tokens** | INTEGER | Embedding tokens | `1234` |
+| **embedding_cost** | DECIMAL(10,6) | Embedding kosten ($) | `0.006170` |
 | **snippets_used** | INTEGER | Aantal snippets | `3` |
 | **openai_input_tokens** | INTEGER | OpenAI input tokens | `456` |
 | **openai_output_tokens** | INTEGER | OpenAI output tokens | `123` |
@@ -131,9 +131,9 @@ ORDER BY date DESC, language;
 - `blocked_requests` - Content filter blocks
 - `error_requests` - Errors
 - `avg_response_time_seconds` - Gemiddelde response tijd
-- `total_pinecone_tokens` - Totaal Pinecone tokens
+- `total_embedding_tokens` - Totaal Embedding tokens
 - `total_openai_tokens` - Totaal OpenAI tokens
-- `total_pinecone_cost` - Totaal Pinecone kosten
+- `total_embedding_cost` - Totaal Embedding kosten
 - `total_openai_cost` - Totaal OpenAI kosten
 - `total_cost` - Totale kosten
 - `avg_cost_per_request` - Gemiddelde kosten per request
@@ -242,8 +242,8 @@ Wanneer een user een vraag stelt en een antwoord krijgt:
   response_time_ms: 2340,
 
   // Pinecone
-  pinecone_tokens: 1234,
-  pinecone_cost: 0.006170,
+  embedding_tokens: 1234,
+  embedding_cost: 0.006170,
   snippets_used: 3,
 
   // OpenAI
@@ -282,8 +282,8 @@ Wanneer OpenAI de vraag blokkeert:
   response_time_ms: 450,
 
   // Geen kosten bij blocks
-  pinecone_tokens: 0,
-  pinecone_cost: 0,
+  embedding_tokens: 0,
+  embedding_cost: 0,
   openai_input_tokens: 0,
   openai_output_tokens: 0,
   openai_total_tokens: 0,
@@ -315,8 +315,8 @@ Wanneer er een fout optreedt:
   response_time_ms: 1230,
 
   // Geen kosten bij errors
-  pinecone_tokens: 0,
-  pinecone_cost: 0,
+  embedding_tokens: 0,
+  embedding_cost: 0,
   openai_input_tokens: 0,
   openai_output_tokens: 0,
   openai_total_tokens: 0,

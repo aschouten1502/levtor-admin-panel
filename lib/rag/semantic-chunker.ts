@@ -57,10 +57,15 @@ REGELS:
 2. Split NOOIT midden in een zin
 3. Split NOOIT midden in een opsomming of tabel
 4. Artikelen, secties en hoofdstukken zijn natuurlijke grenzen
-5. Target: chunks van 300-500 woorden (ca. 1500-2500 karakters)
+5. Target: chunks van 500-800 woorden (ca. 2500-4000 karakters) - GROTERE CHUNKS voor betere context
 6. Markeer grenzen met de marker: |||CHUNK|||
 7. Plaats de marker VOOR de tekst waar een nieuwe chunk begint
 8. De eerste chunk heeft GEEN marker nodig aan het begin
+
+BELANGRIJK:
+- Output ALLEEN de tekst met markers, GEEN uitleg of commentaar
+- Begin NIET met "Hier is..." of andere inleidende tekst
+- Kopieer de tekst exact, voeg alleen |||CHUNK||| markers toe
 
 VOORBEELD INPUT:
 Artikel 4.3 Vakantiegeld
@@ -260,17 +265,59 @@ function findGoodSplitPoint(text: string, targetIndex: number): number {
 
 /**
  * Parse chunks uit AI output met |||CHUNK||| markers
+ * Filtert ook AI instructie-tekst uit die per ongeluk in de output kan zitten
  */
 function parseChunksFromOutput(output: string): string[] {
   const marker = '|||CHUNK|||';
 
+  // Patronen die wijzen op AI instructie-tekst (niet documentinhoud)
+  const AI_INSTRUCTION_PATTERNS = [
+    /^Hier is de (geanalyseerde )?tekst.*/i,
+    /^Hier zijn de chunks.*/i,
+    /^De tekst is opgedeeld.*/i,
+    /^Ik heb de tekst.*/i,
+    /^De volgende chunks.*/i,
+    /^Output:/i,
+    /^Chunks:/i,
+    /^Resultaat:/i,
+    /^Geanalyseerde tekst:/i,
+    /met de optimale chunk grenzen/i,
+  ];
+
   // Split op marker
   const parts = output.split(marker);
 
-  // Filter lege chunks en trim
+  // Filter lege chunks, trim, en verwijder AI instructies
   const chunks = parts
-    .map(chunk => chunk.trim())
-    .filter(chunk => chunk.length > 0);
+    .map(chunk => {
+      let cleaned = chunk.trim();
+
+      // Verwijder AI instructie-tekst aan het begin van de chunk
+      for (const pattern of AI_INSTRUCTION_PATTERNS) {
+        // Check of de chunk begint met een instructie patroon
+        const match = cleaned.match(pattern);
+        if (match && cleaned.indexOf(match[0]) === 0) {
+          // Verwijder de instructie en alles tot de eerste newline
+          const newlineIndex = cleaned.indexOf('\n');
+          if (newlineIndex > 0) {
+            cleaned = cleaned.slice(newlineIndex + 1).trim();
+          }
+        }
+      }
+
+      return cleaned;
+    })
+    .filter(chunk => {
+      // Filter chunks die alleen instructie-tekst zijn
+      if (chunk.length === 0) return false;
+      if (chunk.length < 50) {
+        // Zeer korte chunks checken op instructie-patronen
+        for (const pattern of AI_INSTRUCTION_PATTERNS) {
+          if (pattern.test(chunk)) return false;
+        }
+      }
+      return true;
+    });
 
   return chunks;
 }

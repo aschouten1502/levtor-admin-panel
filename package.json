@@ -1,7 +1,7 @@
 {
-  "name": "hr-assistant-ai",
-  "version": "2.0.0",
-  "description": "HR Assistant AI - Multi-tenant white-label HR chatbot powered by RAG (Retrieval-Augmented Generation)",
+  "name": "levtor-admin-panel",
+  "version": "2.3.0",
+  "description": "Levtor Admin Panel - Multi-tenant white-label AI chatbot platform with RAG, admin dashboard, and QA testing",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^6.1.2",
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.78.0",
     "cheerio": "^1.1.2",
+    "jspdf": "^4.0.0",
     "lucide-react": "^0.552.0",
     "next": "15.5.6",
     "openai": "^6.6.0",

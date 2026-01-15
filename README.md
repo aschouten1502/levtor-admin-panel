@@ -1,152 +1,71 @@
-# HR Assistant AI
+# Levtor Admin Panel
 
-**Version 2.2.0** - Multi-tenant White-Label HR Chatbot with Supabase RAG
+**Version 2.3.0** - Multi-tenant White-Label AI Chatbot Platform
 
-> Transform your HR documentation into an intelligent AI assistant that answers employee questions 24/7 in 12 languages.
+> Enterprise-grade RAG (Retrieval-Augmented Generation) platform with admin dashboard, QA testing, and embeddable widget support.
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.5-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/License-Proprietary-red)]()
+[![Supabase](https://img.shields.io/badge/Supabase-pgvector-green)](https://supabase.com/)
 
 ---
 
-## What is HR Assistant AI?
+## Overview
 
-An **enterprise-grade RAG (Retrieval-Augmented Generation)** chatbot that:
+Levtor Admin Panel is a complete platform for deploying AI-powered chatbots to enterprise clients. Each tenant gets their own isolated chatbot trained on their documents, with full customization and analytics.
 
-- Learns from your HR documents (PDFs) with **smart chunking**
-- Answers employee questions using AI (GPT-4o)
-- Supports **12 languages** with automatic query translation
-- Works as mobile app (PWA)
-- Tracks costs and analytics with **comprehensive logging**
-- Fully white-labelable per client with **Admin Dashboard**
+### Key Capabilities
 
-**Perfect for**: HR teams, employee onboarding, policy Q&A, benefits explanations, and reducing HR support tickets.
-
----
-
-## Key Features (v2.2)
-
-### Supabase RAG (NEW in v2.1)
-- **pgvector Search**: 99.6% cheaper than Pinecone
-- **Smart Chunking**: Fixed, smart, and semantic strategies
-- **Query Translation**: Non-English queries translated for better search
-- **Cohere Reranking**: Optional relevance improvement
-- **RAG Details Logging**: 200+ fields for debugging
-
-### Admin Dashboard (NEW in v2.0)
-- **Tenant Management**: Create, edit, delete tenants
-- **Branding Editor**: Live preview with color picker
-- **Cost Analytics**: Per-tenant cost breakdown
-- **Chat Logs Viewer**: Debug with RAG details
-- **Document Management**: Upload and manage PDFs
-
-### Multi-Tenant Architecture
-- **Middleware Detection**: Subdomain, query param, header, or env
-- **Isolated Data**: Each tenant has separate documents and logs
-- **Database-Driven Config**: Tenant settings stored in Supabase
-- **Client-Side Context**: TenantProvider for React components
-
-### 12-Language Support
-- Nederlands, English, Deutsch, Francais
-- Espanol, Italiano, Polski, Turkce
-- Arabic, Chinese, Portugues, Romana
-
-### Modern UX
-- **PWA**: Install on any device
-- **Streaming Responses**: Real-time answer generation
-- **Citations**: Source documents and page numbers
-- **Conversation Memory**: Multi-turn conversations
+- **Multi-Tenant Architecture** - Isolated data, branding, and documents per client
+- **Supabase pgvector RAG** - Cost-effective vector search (99.6% cheaper than Pinecone)
+- **Admin Dashboard** - Complete tenant management, branding, costs, and analytics
+- **QA Testing Suite** - Automated bot accuracy testing with 8 evaluation categories
+- **Embeddable Widget** - Deploy chatbots on any website with simple embed code
+- **12 Language Support** - Automatic query translation for non-English queries
+- **PWA Support** - Installable on mobile and desktop devices
 
 ---
 
-## Quick Start (10 Minutes)
+## Features
 
-### Prerequisites
+### Admin Dashboard
 
-- Node.js 18+ and npm
-- Supabase account (free tier works)
-- OpenAI API key
-- (Optional) Cohere API key for reranking
+| Feature | Description |
+|---------|-------------|
+| Tenant Management | Create, edit, delete tenants with full configuration |
+| Branding Editor | Live preview with color picker and logo upload |
+| Document Management | Upload PDFs with smart chunking options |
+| Chat Logs | View conversations with full RAG debug details |
+| Cost Analytics | Per-tenant cost tracking and breakdowns |
+| QA Testing | Automated accuracy testing with detailed reports |
+| Implementation | Generate embed codes for client websites |
 
-### 1. Clone & Install
+### RAG System
 
-```bash
-git clone https://github.com/your-org/hr-assistant-ai.git
-cd hr-assistant-ai
-npm install
-```
+| Feature | Description |
+|---------|-------------|
+| Smart Chunking | Fixed, smart, and semantic chunking strategies |
+| Query Translation | Non-English queries translated for better search |
+| Cohere Reranking | Optional relevance improvement |
+| RAG Details Logging | 200+ fields for debugging and analytics |
+| Citation Support | Source documents and page numbers in responses |
 
-### 2. Configure Environment
+### QA Testing (v2.3)
 
-```bash
-cp .env.example .env.local
-```
-
-Edit `.env.local`:
-```bash
-# Required
-TENANT_ID=acme-corp
-TENANT_NAME=Acme Corporation
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
-OPENAI_API_KEY=sk-...
-
-# Optional
-COHERE_API_KEY=...  # For reranking
-NEXT_PUBLIC_COMPANY_NAME=Acme Corporation
-NEXT_PUBLIC_PRIMARY_COLOR=#0066CC
-```
-
-### 3. Setup Database
-
-Run migrations in Supabase SQL Editor:
-- `lib/supabase/migrations/rag_schema.sql`
-- `docs/migrations/MULTI_TENANT_SETUP.sql`
-
-### 4. Run Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000)
-
-### 5. Upload Documents
-
-Use Admin Dashboard at `/admin` or API:
-```bash
-curl -X POST http://localhost:3000/api/rag/upload \
-  -F "file=@document.pdf" \
-  -F "tenant_id=acme-corp"
-```
+Automated testing with 8 evaluation categories:
+- **Retrieval** - Does the bot find correct documents?
+- **Accuracy** - Is the answer content correct?
+- **Citation** - Are source references accurate?
+- **Hallucination** - Does the bot make up information?
+- **Out-of-scope** - Does the bot refuse non-relevant questions?
+- **No-answer** - Does the bot admit when it doesn't know?
+- **Consistency** - Same question produces same answer?
+- **Multilingual** - Does it work in other languages?
 
 ---
 
-## Architecture
-
-```
-User Question
-    |
-middleware.ts --> Tenant Detection
-    |
-API Route (app/api/chat/route.ts)
-    |
-lib/rag/context.ts --> Supabase pgvector
-    |-- Query Translation (non-English)
-    |-- Embedding (text-embedding-3-small)
-    |-- Vector Search (cosine similarity)
-    |-- Cohere Reranking (optional)
-    |
-System Prompt (lib/prompts.ts)
-    |
-OpenAI GPT-4o --> Streaming response
-    |
-Supabase Logging (rag_details JSONB)
-```
-
-### Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -162,21 +81,56 @@ Supabase Logging (rag_details JSONB)
 
 ---
 
-## Cost Tracking
+## Quick Start
 
-### Per-Request Costs
+### Prerequisites
 
-| Component | Cost | Notes |
-|-----------|------|-------|
-| Embedding | $0.02/1M tokens | text-embedding-3-small |
-| Reranking | $1/1000 searches | Cohere (optional) |
-| OpenAI | $2.50 input, $10 output/1M | GPT-4o |
+- Node.js 18+ and npm
+- Supabase account (free tier works)
+- OpenAI API key
+- (Optional) Cohere API key for reranking
 
-### Cost Savings vs Pinecone
+### Installation
 
-- **Pinecone**: $5/1M tokens + $0.05/hour
-- **Supabase pgvector**: $0.02/1M tokens
-- **Savings**: ~99.6%
+```bash
+git clone https://github.com/levtor/levtor-admin-panel.git
+cd levtor-admin-panel
+npm install
+```
+
+### Configuration
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local`:
+```bash
+# Required
+TENANT_ID=demo
+TENANT_NAME=Demo Tenant
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+OPENAI_API_KEY=sk-...
+
+# Optional
+COHERE_API_KEY=...  # For reranking
+NEXT_PUBLIC_COMPANY_NAME=Levtor
+NEXT_PUBLIC_PRIMARY_COLOR=#0066CC
+```
+
+### Database Setup
+
+Run migrations in Supabase SQL Editor:
+- `lib/supabase/migrations/` - All migration files in order
+
+### Run Development Server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
@@ -185,153 +139,62 @@ Supabase Logging (rag_details JSONB)
 ```
 app/
   api/
-    chat/           # Main chat endpoint
-    admin/          # Admin API routes
-    rag/            # Document upload/management
-    tenant/         # Tenant config API
-  admin/            # Admin dashboard pages
-  providers/        # TenantProvider context
-  components/       # UI components
+    chat/               # Main chat endpoint
+    admin/              # Admin API routes
+    rag/                # Document upload/management
+    tenant/             # Tenant config API
+  admin/                # Admin dashboard pages
+    tenants/            # Tenant management
+    branding/           # Branding editor
+    logs/               # Chat logs viewer
+    costs/              # Cost analytics
+    test/               # QA testing UI
+    implement/          # Embed code generator
+    components/         # Shared admin components
+  embed/                # Embeddable widget
+  providers/            # React context providers
 
 lib/
-  rag/              # RAG system (11 files)
-    context.ts      # Vector search
-    embeddings.ts   # OpenAI embeddings
-    chunking.ts     # Document chunking
-    processor.ts    # Upload pipeline
-    reranker.ts     # Cohere reranking
-    query-translator.ts  # Multi-language
-  admin/            # Admin services (9 files)
-  supabase/         # Database client
-  tenant-config.ts  # Tenant configuration
+  rag/                  # RAG system
+  admin/                # Admin services
+  auth/                 # Authentication
+  supabase/             # Database client & migrations
 
-middleware.ts       # Tenant detection
+middleware.ts           # Tenant detection middleware
+```
+
+---
+
+## Admin Routes
+
+| Route | Purpose |
+|-------|---------|
+| `/admin` | Dashboard overview |
+| `/admin/tenants` | Tenant management |
+| `/admin/branding/[tenantId]` | Branding editor |
+| `/admin/logs/[tenantId]` | Chat logs |
+| `/admin/costs` | Cost analytics |
+| `/admin/test/[tenantId]` | QA testing |
+| `/admin/implement/[tenantId]` | Embed code generator |
+
+---
+
+## Development Commands
+
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npx tsc --noEmit     # TypeScript type check
 ```
 
 ---
 
 ## Documentation
 
-### Setup & Deployment
-- **[CLAUDE.md](CLAUDE.md)** - Developer guide (Claude Code)
-- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production deployment
-- **[docs/RAG_SYSTEM.md](docs/RAG_SYSTEM.md)** - RAG architecture
-- **[docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)** - Admin dashboard
-
-### Database
-- **[docs/SUPABASE.md](docs/SUPABASE.md)** - Database schema
-- **[docs/SUPABASE_ANALYTICS.md](docs/SUPABASE_ANALYTICS.md)** - Analytics queries
-- **[docs/migrations/](docs/migrations/)** - SQL migrations
-
-### Quick Setup
-- **[QUICK_START.md](QUICK_START.md)** - 15-20 min setup
-- **[CLIENT_CONFIG.example.md](CLIENT_CONFIG.example.md)** - Config template
-- **[.env.example](.env.example)** - Environment reference
-
----
-
-## Admin Dashboard
-
-Access at `/admin`:
-
-| Route | Purpose |
-|-------|---------|
-| `/admin` | Dashboard with stats |
-| `/admin/tenants` | Manage tenants |
-| `/admin/tenants/new` | Create tenant |
-| `/admin/branding/[id]` | Edit branding |
-| `/admin/logs` | View chat logs |
-| `/admin/costs` | Cost analytics |
-
----
-
-## Multi-Tenant Deployment
-
-### Automated Setup with Claude Code
-
-```bash
-cp CLIENT_CONFIG.example.md CLIENT_CONFIG.md
-# Fill in client details
-# Then: "Configureer deze client op basis van CLIENT_CONFIG.md"
-```
-
-### Manual Setup
-
-1. Create tenant in Admin Dashboard
-2. Upload documents via `/admin/tenants/[id]`
-3. Configure branding
-4. Deploy to Vercel
-
----
-
-## PWA Installation
-
-### iOS
-1. Open in Safari
-2. Tap Share > "Add to Home Screen"
-
-### Android
-1. Open in Chrome
-2. Tap menu > "Add to Home Screen"
-
-### Desktop
-1. Click install icon in address bar
-
----
-
-## Development
-
-```bash
-npm run dev          # Start dev server
-npm run build        # Build for production
-npm run lint         # Run ESLint
-npx tsc --noEmit     # Type check
-```
-
----
-
-## Security
-
-- Secrets in `.env.local` (not committed)
-- Service Role Key server-side only
-- Input validation prevents injection
-- Content filter via OpenAI
-- Tenant isolation at database level
-
----
-
-## Deployment
-
-### Vercel (Recommended)
-
-1. Push to GitHub
-2. Import to Vercel
-3. Add environment variables
-4. Deploy
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for details.
-
----
-
-## Changelog
-
-### v2.2.0 (Current)
-- Query translation for multi-language search
-- Enhanced RAG details logging
-- Cohere reranking support
-
-### v2.1.0
-- Supabase pgvector RAG (replaced Pinecone)
-- 99.6% cost reduction
-
-### v2.0.0
-- Admin Dashboard
-- Multi-tenant architecture
-- Middleware tenant detection
-
-### v1.x
-- Original GeoStick implementation
-- Pinecone-based RAG
+- **[CLAUDE.md](CLAUDE.md)** - Developer guide
+- **[docs/](docs/)** - Full documentation
 
 ---
 
@@ -341,12 +204,4 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for details.
 
 ---
 
-## Contact
-
-**Levtor**
-- Website: https://levtor.com
-- Email: support@levtor.com
-
----
-
-**Built with Next.js, OpenAI & Supabase pgvector**
+**Levtor** | [levtor.com](https://levtor.com)

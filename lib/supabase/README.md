@@ -70,8 +70,8 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | `language` | VARCHAR(10) | Taal (nl, en, de, etc.) |
 | `response_time_seconds` | DECIMAL | Response tijd in seconden |
 | `response_time_ms` | INTEGER | Response tijd in milliseconden |
-| `pinecone_tokens` | INTEGER | Pinecone tokens gebruikt |
-| `pinecone_cost` | DECIMAL | Pinecone kosten in USD |
+| `embedding_tokens` | INTEGER | Embedding tokens gebruikt |
+| `embedding_cost` | DECIMAL | Embedding kosten in USD |
 | `openai_input_tokens` | INTEGER | OpenAI input tokens |
 | `openai_output_tokens` | INTEGER | OpenAI output tokens |
 | `openai_total_tokens` | INTEGER | Totaal OpenAI tokens |

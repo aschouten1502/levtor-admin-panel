@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { generateTenantSlug } from '@/lib/admin/tenant-service';
+import { validateTenantCreate, isValid, validateColor, type ValidationErrors } from '@/lib/admin/validation';
 
 /**
  * New Tenant Onboarding Form
@@ -24,6 +25,18 @@ export default function NewTenantPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
+
+  // Validation state
+  const [fieldErrors, setFieldErrors] = useState<ValidationErrors>({});
+
+  // Upload tracking for better feedback
+  interface UploadResult {
+    success: boolean;
+    name: string;
+    error?: string;
+  }
+  const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -55,6 +68,9 @@ export default function NewTenantPage() {
   const [logoFile, setLogoFile] = useState<FileWithPreview | null>(null);
   const [documentFiles, setDocumentFiles] = useState<FileWithPreview[]>([]);
 
+  // Ref to track current preview URL for cleanup (avoids stale closure issues)
+  const logoPreviewRef = useRef<string | null>(null);
+
   // Auto-generate slug from name
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
@@ -65,15 +81,38 @@ export default function NewTenantPage() {
     }));
   };
 
-  // Handle logo selection
+  // Handle logo selection - with memory leak fix
   const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const fileWithPreview = file as FileWithPreview;
-      fileWithPreview.preview = URL.createObjectURL(file);
-      setLogoFile(fileWithPreview);
+      // Revoke previous URL to prevent memory leak
+      if (logoPreviewRef.current) {
+        URL.revokeObjectURL(logoPreviewRef.current);
+      }
+      const preview = URL.createObjectURL(file);
+      logoPreviewRef.current = preview; // Track for cleanup
+      setLogoFile(Object.assign(file, { preview }) as FileWithPreview);
     }
   };
+
+  // Handle logo removal - with memory cleanup (uses ref, no stale closure)
+  const handleLogoRemove = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (logoPreviewRef.current) {
+      URL.revokeObjectURL(logoPreviewRef.current);
+      logoPreviewRef.current = null;
+    }
+    setLogoFile(null);
+  }, []); // Empty deps - uses ref instead of state
+
+  // Cleanup preview URLs on unmount (uses ref for stable reference)
+  useEffect(() => {
+    return () => {
+      if (logoPreviewRef.current) {
+        URL.revokeObjectURL(logoPreviewRef.current);
+      }
+    };
+  }, []); // Empty deps is correct - ref cleanup on unmount
 
   // Handle document selection
   const handleDocumentsSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,14 +140,19 @@ export default function NewTenantPage() {
     setDocumentFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Submit form
+  // Submit form with improved upload feedback
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
+    setUploadResults([]);
+    setUploadProgress(null);
+
+    const results: UploadResult[] = [];
 
     try {
       // Step 1: Create tenant
+      setUploadProgress('Tenant aanmaken...');
       const tenantResponse = await fetch('/api/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +164,6 @@ export default function NewTenantPage() {
           welcome_message: formData.welcome_message,
           contact_email: formData.contact_email,
           is_demo: formData.is_demo,
-          // Multilingual RAG support (v2.2)
           document_language: formData.document_language,
           website_url: formData.website_url || null,
         }),
@@ -136,41 +179,61 @@ export default function NewTenantPage() {
 
       // Step 2: Upload logo if provided
       if (logoFile) {
-        const logoFormData = new FormData();
-        logoFormData.append('logo', logoFile);
+        setUploadProgress('Logo uploaden...');
+        try {
+          const logoFormData = new FormData();
+          logoFormData.append('logo', logoFile);
 
-        const logoResponse = await fetch(`/api/admin/tenants/${tenantId}`, {
-          method: 'PATCH',
-          body: logoFormData,
-        });
+          const logoResponse = await fetch(`/api/admin/tenants/${tenantId}`, {
+            method: 'PATCH',
+            body: logoFormData,
+          });
 
-        if (!logoResponse.ok) {
-          console.error('Logo upload failed, continuing...');
+          if (!logoResponse.ok) {
+            const errorData = await logoResponse.json().catch(() => ({}));
+            results.push({ success: false, name: 'Logo', error: errorData.error || 'Upload mislukt' });
+          } else {
+            results.push({ success: true, name: 'Logo' });
+          }
+        } catch {
+          results.push({ success: false, name: 'Logo', error: 'Netwerkfout' });
         }
       }
 
-      // Step 3: Upload documents
-      for (const doc of documentFiles) {
-        const docFormData = new FormData();
-        docFormData.append('file', doc);
+      // Step 3: Upload documents with progress
+      for (let i = 0; i < documentFiles.length; i++) {
+        const doc = documentFiles[i];
+        setUploadProgress(`Document uploaden (${i + 1}/${documentFiles.length}): ${doc.name}`);
 
-        const docResponse = await fetch(`/api/admin/tenants/${tenantId}/documents`, {
-          method: 'POST',
-          body: docFormData,
-        });
+        try {
+          const docFormData = new FormData();
+          docFormData.append('file', doc);
 
-        if (!docResponse.ok) {
-          console.error(`Document upload failed: ${doc.name}`);
+          const docResponse = await fetch(`/api/admin/tenants/${tenantId}/documents`, {
+            method: 'POST',
+            body: docFormData,
+          });
+
+          if (!docResponse.ok) {
+            const errorData = await docResponse.json().catch(() => ({}));
+            results.push({ success: false, name: doc.name, error: errorData.error || 'Upload mislukt' });
+          } else {
+            results.push({ success: true, name: doc.name });
+          }
+        } catch {
+          results.push({ success: false, name: doc.name, error: 'Netwerkfout' });
         }
       }
 
+      setUploadResults(results);
       setCreatedTenantId(tenantId);
       setStep(4); // Success step
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setError(err instanceof Error ? err.message : 'Er is iets misgegaan');
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -202,17 +265,72 @@ export default function NewTenantPage() {
 
       {/* Success State */}
       {step === 4 && createdTenantId && (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-6">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+        <div className="bg-white rounded-xl border border-gray-200 p-8">
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-6">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Tenant Created!</h2>
+            <p className="text-gray-500 mb-6">
+              {formData.name} has been successfully created.
+              {documentFiles.length > 0 && ' Documents are being processed.'}
+            </p>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Tenant Created!</h2>
-          <p className="text-gray-500 mb-6">
-            {formData.name} has been successfully created.
-            {documentFiles.length > 0 && ' Documents are being processed.'}
-          </p>
+
+          {/* Upload Results - Show any failures */}
+          {uploadResults.length > 0 && (
+            <div className="mb-6">
+              {uploadResults.some(r => !r.success) && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-yellow-800">
+                        Sommige uploads zijn mislukt
+                      </h4>
+                      <ul className="mt-2 text-sm text-yellow-700 space-y-1">
+                        {uploadResults.filter(r => !r.success).map((r, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            <span className="font-medium">{r.name}:</span> {r.error}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-xs text-yellow-600">
+                        Je kunt deze bestanden later opnieuw uploaden via de tenant instellingen.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Show successful uploads */}
+              {uploadResults.some(r => r.success) && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-green-800 mb-2">
+                    Succesvol geüpload ({uploadResults.filter(r => r.success).length})
+                  </h4>
+                  <ul className="text-sm text-green-700 space-y-1">
+                    {uploadResults.filter(r => r.success).map((r, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        {r.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-center gap-4">
             <Link
               href={`/admin/tenants/${createdTenantId}`}
@@ -296,8 +414,14 @@ export default function NewTenantPage() {
                     onChange={handleNameChange}
                     placeholder="Acme Corporation"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    aria-describedby={fieldErrors.name ? 'name-error' : undefined}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      fieldErrors.name ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   />
+                  {fieldErrors.name && (
+                    <p id="name-error" className="text-sm text-red-600 mt-1" role="alert">{fieldErrors.name}</p>
+                  )}
                 </div>
 
                 <div>
@@ -313,11 +437,18 @@ export default function NewTenantPage() {
                       pattern="^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$"
                       placeholder="acme-corp"
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+                      aria-describedby={fieldErrors.id ? 'id-error' : 'id-hint'}
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono ${
+                        fieldErrors.id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
                     />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Lowercase letters, numbers, and dashes only
-                    </p>
+                    {fieldErrors.id ? (
+                      <p id="id-error" className="text-sm text-red-600 mt-1" role="alert">{fieldErrors.id}</p>
+                    ) : (
+                      <p id="id-hint" className="text-xs text-gray-400 mt-1">
+                        Lowercase letters, numbers, and dashes only
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -331,8 +462,14 @@ export default function NewTenantPage() {
                     value={formData.contact_email}
                     onChange={(e) => setFormData((prev) => ({ ...prev, contact_email: e.target.value }))}
                     placeholder="hr@acme-corp.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    aria-describedby={fieldErrors.contact_email ? 'email-error' : undefined}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      fieldErrors.contact_email ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   />
+                  {fieldErrors.contact_email && (
+                    <p id="email-error" className="text-sm text-red-600 mt-1" role="alert">{fieldErrors.contact_email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -382,11 +519,18 @@ export default function NewTenantPage() {
                     value={formData.website_url}
                     onChange={(e) => setFormData((prev) => ({ ...prev, website_url: e.target.value }))}
                     placeholder="https://www.company.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    aria-describedby={fieldErrors.website_url ? 'url-error' : 'url-hint'}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      fieldErrors.website_url ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Optioneel: Voor automatische branding extractie in de volgende stap
-                  </p>
+                  {fieldErrors.website_url ? (
+                    <p id="url-error" className="text-sm text-red-600 mt-1" role="alert">{fieldErrors.website_url}</p>
+                  ) : (
+                    <p id="url-hint" className="text-xs text-gray-400 mt-1">
+                      Optioneel: Voor automatische branding extractie in de volgende stap
+                    </p>
+                  )}
                 </div>
 
                 {/* Demo toggle */}
@@ -424,6 +568,7 @@ export default function NewTenantPage() {
                       onChange={handleLogoSelect}
                       accept="image/png,image/jpeg,image/svg+xml,image/webp"
                       className="hidden"
+                      aria-label="Upload company logo"
                     />
                     {logoFile ? (
                       <div className="flex flex-col items-center gap-3">
@@ -435,10 +580,7 @@ export default function NewTenantPage() {
                         <p className="text-sm text-gray-600">{logoFile.name}</p>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLogoFile(null);
-                          }}
+                          onClick={handleLogoRemove}
                           className="text-sm text-red-600 hover:text-red-800"
                         >
                           Remove
@@ -470,15 +612,25 @@ export default function NewTenantPage() {
                         id="primary_color"
                         value={formData.primary_color}
                         onChange={(e) => setFormData((prev) => ({ ...prev, primary_color: e.target.value }))}
-                        className="w-14 h-12 rounded-lg border border-gray-300 cursor-pointer"
+                        className={`w-14 h-12 rounded-lg border cursor-pointer ${
+                          fieldErrors.primary_color ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       />
                       <input
                         type="text"
                         value={formData.primary_color}
                         onChange={(e) => setFormData((prev) => ({ ...prev, primary_color: e.target.value }))}
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                        className={`flex-1 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${
+                          fieldErrors.primary_color ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        }`}
+                        aria-label="Primary color hex value"
+                        aria-describedby={fieldErrors.primary_color ? 'primary-color-error' : undefined}
+                        placeholder="#000000"
                       />
                     </div>
+                    {fieldErrors.primary_color && (
+                      <p id="primary-color-error" className="text-sm text-red-600 mt-1" role="alert">{fieldErrors.primary_color}</p>
+                    )}
                   </div>
 
                   <div>
@@ -491,15 +643,25 @@ export default function NewTenantPage() {
                         id="secondary_color"
                         value={formData.secondary_color}
                         onChange={(e) => setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))}
-                        className="w-14 h-12 rounded-lg border border-gray-300 cursor-pointer"
+                        className={`w-14 h-12 rounded-lg border cursor-pointer ${
+                          fieldErrors.secondary_color ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       />
                       <input
                         type="text"
                         value={formData.secondary_color}
                         onChange={(e) => setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))}
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                        className={`flex-1 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${
+                          fieldErrors.secondary_color ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        }`}
+                        aria-label="Secondary color hex value"
+                        aria-describedby={fieldErrors.secondary_color ? 'secondary-color-error' : undefined}
+                        placeholder="#000000"
                       />
                     </div>
+                    {fieldErrors.secondary_color && (
+                      <p id="secondary-color-error" className="text-sm text-red-600 mt-1" role="alert">{fieldErrors.secondary_color}</p>
+                    )}
                   </div>
                 </div>
 
@@ -558,6 +720,7 @@ export default function NewTenantPage() {
                       accept=".pdf"
                       multiple
                       className="hidden"
+                      aria-label="Upload HR documents"
                     />
                     <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -598,6 +761,7 @@ export default function NewTenantPage() {
                             type="button"
                             onClick={() => removeDocument(index)}
                             className="text-gray-400 hover:text-red-600 p-2"
+                            aria-label={`Remove ${file.name}`}
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -617,13 +781,24 @@ export default function NewTenantPage() {
               </div>
             )}
 
+            {/* Upload Progress */}
+            {isSubmitting && uploadProgress && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6" role="status" aria-live="polite">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <span className="text-sm text-blue-700">{uploadProgress}</span>
+                </div>
+              </div>
+            )}
+
             {/* Navigation Buttons */}
             <div className="flex items-center justify-between mt-6">
               {step > 1 ? (
                 <button
                   type="button"
                   onClick={() => setStep((s) => s - 1)}
-                  className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -638,12 +813,30 @@ export default function NewTenantPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    // Validate current step
-                    if (step === 1 && (!formData.name || !formData.id)) {
-                      setError('Please fill in all required fields');
-                      return;
+                    // Validate current step using centralized validation
+                    if (step === 1) {
+                      const errors = validateTenantCreate(formData);
+                      if (!isValid(errors)) {
+                        setFieldErrors(errors);
+                        setError('Controleer de gemarkeerde velden');
+                        return;
+                      }
+                    }
+                    if (step === 2) {
+                      // Validate colors
+                      const errors: ValidationErrors = {};
+                      const primaryError = validateColor(formData.primary_color);
+                      if (primaryError) errors.primary_color = primaryError;
+                      const secondaryError = validateColor(formData.secondary_color);
+                      if (secondaryError) errors.secondary_color = secondaryError;
+                      if (!isValid(errors)) {
+                        setFieldErrors(errors);
+                        setError('Controleer de kleurcodes (formaat #RRGGBB)');
+                        return;
+                      }
                     }
                     setError(null);
+                    setFieldErrors({});
                     setStep((s) => s + 1);
                   }}
                   className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"

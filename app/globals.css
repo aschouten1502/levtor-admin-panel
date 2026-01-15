@@ -140,9 +140,10 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Custom scrollbar styling - Purple Accent */
+/* Custom scrollbar styling - Uses tenant primary color via CSS variable */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -151,10 +152,15 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(270, 70%, 60%);
+  background: var(--scrollbar-color, #c1c1c1);  /* Neutral gray default, overridden by tenant */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(270, 70%, 50%);
+  background: var(--scrollbar-color-hover, #a1a1a1);  /* Darker gray on hover */
+}
+
+/* Hide horizontal scrollbar by default - most pages don't need it */
+body {
+  overflow-x: hidden;
 }

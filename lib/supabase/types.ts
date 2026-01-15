@@ -38,8 +38,8 @@ export interface ChatLogRow {
   openai_input_tokens: number | null
   openai_output_tokens: number | null
   openai_total_tokens: number | null
-  pinecone_cost: number | null
-  pinecone_tokens: number | null
+  embedding_cost: number | null
+  embedding_tokens: number | null
   question: string
   response_time_ms: number | null
   response_time_seconds: number | null
@@ -73,8 +73,8 @@ export interface ChatLogInsert {
   openai_input_tokens?: number | null
   openai_output_tokens?: number | null
   openai_total_tokens?: number | null
-  pinecone_cost?: number | null
-  pinecone_tokens?: number | null
+  embedding_cost?: number | null
+  embedding_tokens?: number | null
   question: string
   response_time_ms?: number | null
   response_time_seconds?: number | null
@@ -108,8 +108,8 @@ export interface ChatLogUpdate {
   openai_input_tokens?: number | null
   openai_output_tokens?: number | null
   openai_total_tokens?: number | null
-  pinecone_cost?: number | null
-  pinecone_tokens?: number | null
+  embedding_cost?: number | null
+  embedding_tokens?: number | null
   question?: string
   response_time_ms?: number | null
   response_time_seconds?: number | null
@@ -158,8 +158,8 @@ export type Database = {
           total_cost: number | null
           total_openai_cost: number | null
           total_openai_tokens: number | null
-          total_pinecone_cost: number | null
-          total_pinecone_tokens: number | null
+          total_embedding_cost: number | null
+          total_embedding_tokens: number | null
           total_requests: number | null
         }
         Relationships: []

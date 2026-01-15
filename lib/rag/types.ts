@@ -447,6 +447,7 @@ export interface RAGOpenAIDetails {
 export interface RAGCostBreakdown {
   embedding: number;             // Query embedding cost
   reranking: number;             // Cohere reranking cost
+  translation?: number;          // Query translation cost (GPT-4o-mini)
   openai: number;                // OpenAI chat completion cost
   total: number;
 }

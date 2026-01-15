@@ -99,8 +99,8 @@ export async function logChatRequest(
     language?: string;
     response_time_seconds: number;
     response_time_ms: number;
-    pinecone_tokens: number;
-    pinecone_cost: number;
+    embedding_tokens: number;
+    embedding_cost: number;
     openai_input_tokens: number;
     openai_output_tokens: number;
     openai_total_tokens: number;
@@ -141,8 +141,8 @@ export async function logChatRequest(
       language: data.language || 'nl',
       response_time_seconds: data.response_time_seconds,
       response_time_ms: data.response_time_ms,
-      pinecone_tokens: data.pinecone_tokens,
-      pinecone_cost: data.pinecone_cost,
+      embedding_tokens: data.embedding_tokens,
+      embedding_cost: data.embedding_cost,
       openai_input_tokens: data.openai_input_tokens,
       openai_output_tokens: data.openai_output_tokens,
       openai_total_tokens: data.openai_total_tokens,
@@ -344,8 +344,8 @@ export async function logContentFilterEvent(
   return logChatRequest(tenantId, {
     ...data,
     language: 'nl',
-    pinecone_tokens: 0,
-    pinecone_cost: 0,
+    embedding_tokens: 0,
+    embedding_cost: 0,
     openai_input_tokens: 0,
     openai_output_tokens: 0,
     openai_total_tokens: 0,
@@ -379,8 +379,8 @@ export async function logErrorEvent(
     ...data,
     answer: 'Error occurred',
     language: 'nl',
-    pinecone_tokens: 0,
-    pinecone_cost: 0,
+    embedding_tokens: 0,
+    embedding_cost: 0,
     openai_input_tokens: 0,
     openai_output_tokens: 0,
     openai_total_tokens: 0,
