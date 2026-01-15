@@ -6,20 +6,19 @@
  * GET /api/tenant
  * Returns tenant configuration (branding, colors, etc.)
  *
- * The tenant ID is automatically detected by the middleware from:
- * 1. Subdomain: acme.localhost:3000
- * 2. Query param: ?tenant=acme
- * 3. Header: X-Tenant-ID
- * 4. Environment variable: TENANT_ID
+ * Tenant ID detection priority:
+ * 1. Query param: ?tenant=acme (highest - for embed pages)
+ * 2. Header: X-Tenant-ID (set by middleware)
+ * 3. Environment variable: TENANT_ID (fallback)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantConfig, getTenantCssVariables } from '@/lib/tenant-config';
 
 export async function GET(request: NextRequest) {
-  // Get tenant ID from middleware-injected header
-  const tenantId = request.headers.get('x-tenant-id')
-    || request.nextUrl.searchParams.get('tenant')
+  // Get tenant ID - query param takes priority for embed pages
+  const tenantId = request.nextUrl.searchParams.get('tenant')
+    || request.headers.get('x-tenant-id')
     || process.env.TENANT_ID;
 
   if (!tenantId) {
