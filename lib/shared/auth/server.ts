@@ -51,30 +51,15 @@ export interface AuthResult {
 // ========================================
 
 /**
- * Helper to filter cookies by context
- * Each context (admin/customer) has its own cookie namespace
- */
-function filterCookiesByContext(
-  allCookies: { name: string; value: string }[],
-  context: AuthContext
-): { name: string; value: string }[] {
-  if (context === 'any') {
-    // Return all cookies (legacy behavior)
-    return allCookies;
-  }
-
-  const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY : CUSTOMER_STORAGE_KEY;
-
-  // Only return cookies that belong to this specific context
-  // This prevents session contamination between admin and customer sessions
-  return allCookies.filter(cookie => cookie.name.startsWith(storageKey));
-}
-
-/**
  * Maak een Supabase client voor Server Components
  * Gebruikt cookies() van next/headers
  *
  * @param context - 'admin' | 'customer' | 'any' - determines which session to use
+ *
+ * Session isolation werkt via cookieOptions.name (storageKey):
+ * - Supabase filtert automatisch op basis van de storage key
+ * - Admin sessies gebruiken 'sb-admin-auth' cookies
+ * - Customer sessies gebruiken 'sb-customer-auth' cookies
  */
 export async function createServerSupabaseClient(context: AuthContext = 'any') {
   if (!isAuthConfigured()) {
@@ -94,8 +79,8 @@ export async function createServerSupabaseClient(context: AuthContext = 'any') {
     }),
     cookies: {
       getAll() {
-        const allCookies = cookieStore.getAll();
-        return context === 'any' ? allCookies : filterCookiesByContext(allCookies, context);
+        // Return ALL cookies - Supabase filtert zelf op basis van storageKey
+        return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
         try {
@@ -137,8 +122,8 @@ export function createApiSupabaseClient(
     }),
     cookies: {
       getAll() {
-        const allCookies = request.cookies.getAll();
-        return context === 'any' ? allCookies : filterCookiesByContext(allCookies, context);
+        // Return ALL cookies - Supabase filtert zelf op basis van storageKey
+        return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
@@ -177,8 +162,8 @@ export function createMiddlewareSupabaseClient(request: NextRequest, context: Au
     }),
     cookies: {
       getAll() {
-        const allCookies = request.cookies.getAll();
-        return context === 'any' ? allCookies : filterCookiesByContext(allCookies, context);
+        // Return ALL cookies - Supabase filtert zelf op basis van storageKey
+        return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
