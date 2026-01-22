@@ -295,3 +295,73 @@ export function generateLightColor(hexColor: string): string {
   // Convert back to hex
   return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
 }
+
+// ========================================
+// BRANDING COST LOGGING (v2.4)
+// ========================================
+
+export interface BrandingOperationLog {
+  tenantId: string;
+  operationType: 'fun_facts' | 'url_extraction';
+  sourceFile?: string;
+  sourceUrl?: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  extractedData: unknown;
+  durationMs: number;
+  success?: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Log een branding operatie (bijv. fun facts extractie) naar de database
+ * voor kosten tracking
+ */
+export async function logBrandingOperation(params: BrandingOperationLog): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (getSupabase()
+      .from('branding_logs') as any)
+      .insert({
+        tenant_id: params.tenantId,
+        operation_type: params.operationType,
+        source_file: params.sourceFile || null,
+        source_url: params.sourceUrl || null,
+        input_tokens: params.inputTokens,
+        output_tokens: params.outputTokens,
+        cost_usd: params.costUsd,
+        extracted_data: params.extractedData,
+        duration_ms: params.durationMs,
+        success: params.success ?? true,
+        error_message: params.errorMessage || null,
+      });
+
+    if (error) {
+      console.error('❌ [BrandingService] Failed to log branding operation:', error);
+      // Don't throw - logging failures shouldn't break the main flow
+    } else {
+      console.log(`💰 [BrandingService] Logged ${params.operationType} operation: $${params.costUsd.toFixed(6)}`);
+    }
+  } catch (err) {
+    console.error('❌ [BrandingService] Error logging branding operation:', err);
+    // Don't throw - logging failures shouldn't break the main flow
+  }
+}
+
+/**
+ * Bereken de kosten voor een GPT-4o API call
+ * Prijzen: $2.50 per 1M input tokens, $10 per 1M output tokens
+ */
+export function calculateGPT4oCost(inputTokens: number, outputTokens: number): number {
+  const inputCost = (inputTokens * 2.5) / 1_000_000;
+  const outputCost = (outputTokens * 10) / 1_000_000;
+  return inputCost + outputCost;
+}
+
+/**
+ * Schat het aantal tokens in een tekst (ruwe schatting: ~4 chars per token)
+ */
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}

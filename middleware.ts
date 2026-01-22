@@ -3,11 +3,11 @@
  * MIDDLEWARE
  * ========================================
  *
- * Combineert tenant detectie en admin authenticatie.
+ * Combineert tenant detectie en authenticatie.
  *
  * FUNCTIONALITEIT:
  * 1. Tenant detectie voor multi-tenant support
- * 2. Auth bescherming voor /api/admin/* routes
+ * 2. Auth bescherming voor /api/admin/* en /api/portal/* routes
  * 3. Session refresh voor Supabase Auth
  *
  * TENANT DETECTIE VOLGORDE (eerste match wint):
@@ -17,7 +17,8 @@
  * 4. Environment variable: TENANT_ID (fallback)
  *
  * AUTH BESCHERMING:
- * - /api/admin/* routes vereisen geldige Supabase session
+ * - /api/admin/* routes vereisen geldige Supabase session (admin users)
+ * - /api/portal/* routes vereisen geldige Supabase session (customer users)
  * - Andere routes zijn niet beschermd
  */
 
@@ -33,7 +34,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 // Routes die auth bescherming nodig hebben
-const PROTECTED_API_ROUTES = ['/api/admin'];
+const PROTECTED_API_ROUTES = ['/api/admin', '/api/portal'];
 
 // ========================================
 // TENANT DETECTION FUNCTIONS
@@ -116,33 +117,6 @@ function createMiddlewareClient(request: NextRequest, response: NextResponse) {
   });
 }
 
-/**
- * Check of de request geauthenticeerd is
- */
-async function isAuthenticated(request: NextRequest, response: NextResponse): Promise<boolean> {
-  // Als auth niet geconfigureerd is, sta alles toe (development fallback)
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('⚠️ [Middleware] Auth not configured - allowing request');
-    }
-    return true;
-  }
-
-  try {
-    const supabase = createMiddlewareClient(request, response);
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    console.error('❌ [Middleware] Auth check error:', err);
-    return false;
-  }
-}
-
 // ========================================
 // MAIN MIDDLEWARE
 // ========================================
@@ -211,44 +185,57 @@ export async function middleware(request: NextRequest) {
   }
 
   // ========================================
-  // 3. AUTH CHECK FOR PROTECTED API ROUTES
+  // 3. AUTH CHECK & SESSION REFRESH
   // ========================================
 
-  if (isProtectedApiRoute(pathname)) {
-    const authenticated = await isAuthenticated(request, response);
+  // Refresh session voor alle requests (als auth geconfigureerd is)
+  // Dit combineert auth check en session refresh in één call
+  let isUserAuthenticated = false;
 
-    if (!authenticated) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🔒 [Middleware] Unauthorized request to ${pathname}`);
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Unauthorized',
-          message: 'Je moet ingelogd zijn om deze actie uit te voeren.',
-        },
-        { status: 401 }
-      );
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ [Middleware] Authorized request to ${pathname}`);
-    }
-  }
-
-  // ========================================
-  // 4. SESSION REFRESH (voor Supabase Auth)
-  // ========================================
-
-  // Refresh de session voor alle requests (als auth geconfigureerd is)
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     try {
       const supabase = createMiddlewareClient(request, response);
       // getUser() refresht automatisch de session als nodig
-      await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      isUserAuthenticated = !error && !!user;
     } catch {
       // Ignore errors - session refresh is niet kritiek
+      isUserAuthenticated = false;
     }
+  } else {
+    // Auth niet geconfigureerd - FAIL CLOSED voor security
+    console.error('🔒 [Middleware] SECURITY: Supabase auth not configured');
+
+    if (isProtectedApiRoute(pathname)) {
+      return NextResponse.json(
+        {
+          error: 'Server configuration error',
+          message: 'Authentication service not available'
+        },
+        { status: 503 }
+      );
+    }
+    // Niet-protected routes mogen door (public pages)
+    isUserAuthenticated = false;
+  }
+
+  // Check of protected route auth vereist
+  if (isProtectedApiRoute(pathname) && !isUserAuthenticated) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔒 [Middleware] Unauthorized request to ${pathname}`);
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Unauthorized',
+        message: 'Je moet ingelogd zijn om deze actie uit te voeren.',
+      },
+      { status: 401 }
+    );
+  }
+
+  if (process.env.NODE_ENV === 'development' && isProtectedApiRoute(pathname)) {
+    console.log(`✅ [Middleware] Authorized request to ${pathname}`);
   }
 
   // ========================================
@@ -259,7 +246,15 @@ export async function middleware(request: NextRequest) {
   // externe websites de chatbot kunnen embedden
   if (pathname.startsWith('/embed')) {
     response.headers.delete('X-Frame-Options');
-    response.headers.set('Content-Security-Policy', "frame-ancestors 'self' *");
+
+    // Haal allowed domains uit environment (comma-separated)
+    // Default: alleen eigen domein voor security
+    const ALLOWED_EMBED_DOMAINS = process.env.ALLOWED_EMBED_DOMAINS || '';
+    const frameAncestors = ALLOWED_EMBED_DOMAINS
+      ? `frame-ancestors 'self' ${ALLOWED_EMBED_DOMAINS}`
+      : "frame-ancestors 'self'";
+
+    response.headers.set('Content-Security-Policy', frameAncestors);
   }
 
   return response;

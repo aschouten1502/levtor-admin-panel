@@ -24,8 +24,9 @@ import { NextRequest, NextResponse } from 'next/server';
 // Import alle modules
 // UPDATED: Pinecone vervangen door Supabase RAG
 import { retrieveContext } from '@/lib/rag/context';
-import { initializeOpenAI, prepareMessages, generateStreamingAnswer } from '@/lib/openai';
-import { generateSystemPrompt } from '@/lib/prompts';
+import { checkRateLimit, getRateLimitKey, getClientIp, RATE_LIMITS } from '@/lib/shared/rate-limiter';
+import { initializeOpenAI, prepareMessages, generateStreamingAnswer } from '@/lib/bot/openai';
+import { generateSystemPrompt } from '@/lib/products/hr-bot/prompts';
 import {
   logSuccessfulRequest,
   logError,
@@ -34,8 +35,15 @@ import {
   getUserFriendlyErrorMessage,
   categorizeError,
   type RequestSummary
-} from '@/lib/logging';
-import { updateChatRequestWithRetry } from '@/lib/supabase/supabase-client';
+} from '@/lib/shared/logging';
+import { updateChatRequestWithRetry } from '@/lib/shared/supabase/supabase-client';
+
+// ========================================
+// VALIDATION CONSTANTS
+// ========================================
+
+const SUPPORTED_LANGUAGES = ['nl', 'en', 'de', 'fr', 'es', 'it', 'pl', 'tr', 'ar', 'zh', 'pt', 'ro'];
+const MAX_MESSAGE_LENGTH = 10000;
 
 // ========================================
 // MAIN API HANDLER
@@ -70,15 +78,12 @@ export async function POST(request: NextRequest) {
     // ========================================
     // STEP 1.5: Get Tenant ID (MULTI-TENANT)
     // ========================================
-    // Priority: 1. Request body, 2. Header (from middleware), 3. Env var
-    tenantId = body.tenantId
-      || request.headers.get('x-tenant-id')
-      || process.env.TENANT_ID
-      || '';
+    // Priority: 1. Request body, 2. Header (from middleware)
+    // NOTE: Geen env var fallback meer - tenant moet expliciet zijn
+    tenantId = body.tenantId || request.headers.get('x-tenant-id') || '';
 
     const tenantSource = body.tenantId ? 'body'
       : request.headers.get('x-tenant-id') ? 'header'
-      : process.env.TENANT_ID ? 'env'
       : 'none';
 
     console.log('\n📝 [API] ========== USER QUESTION ==========');
@@ -88,21 +93,82 @@ export async function POST(request: NextRequest) {
     console.log('💬 [API] Conversation history length:', conversationHistory?.length || 0);
     console.log('🌐 [API] Selected language:', language);
 
-    // Valideer dat er een message is
-    if (!message) {
-      console.log('❌ [API] No message provided');
+    // ========================================
+    // STEP 1.6: Validatie
+    // ========================================
+
+    // Valideer tenant ID
+    if (!tenantId) {
+      console.log('❌ [API] No tenant ID provided');
       return NextResponse.json(
-        { error: 'Message is required' },
+        {
+          error: 'tenant_required',
+          message: 'Tenant ID is required. Provide via ?tenant=xxx, X-Tenant-ID header, or request body.'
+        },
         { status: 400 }
       );
     }
 
-    // Valideer dat er een tenant ID is
-    if (!tenantId) {
-      console.log('❌ [API] No tenant ID provided');
+    // Valideer message
+    if (!message || typeof message !== 'string') {
+      console.log('❌ [API] No message provided');
       return NextResponse.json(
-        { error: 'Tenant ID is required. Provide via ?tenant=xxx, X-Tenant-ID header, or request body.' },
+        { error: 'validation_error', message: 'Message is required' },
         { status: 400 }
+      );
+    }
+
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length === 0) {
+      console.log('❌ [API] Empty message after trim');
+      return NextResponse.json(
+        { error: 'validation_error', message: 'Message cannot be empty' },
+        { status: 400 }
+      );
+    }
+
+    if (trimmedMessage.length > MAX_MESSAGE_LENGTH) {
+      console.log('❌ [API] Message too long:', trimmedMessage.length);
+      return NextResponse.json(
+        {
+          error: 'validation_error',
+          message: `Message too long. Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`
+        },
+        { status: 400 }
+      );
+    }
+
+    // Use trimmed message from here
+    message = trimmedMessage;
+
+    // Valideer language
+    if (language && !SUPPORTED_LANGUAGES.includes(language)) {
+      console.warn(`⚠️ [API] Invalid language "${language}", defaulting to "nl"`);
+      language = 'nl';
+    }
+
+    // ========================================
+    // STEP 1.7: Rate Limiting
+    // ========================================
+    const clientIp = getClientIp(request);
+    const rateLimitKey = getRateLimitKey(tenantId, clientIp, 'chat');
+    const rateLimit = checkRateLimit(rateLimitKey, RATE_LIMITS.chat);
+
+    if (!rateLimit.allowed) {
+      console.log('🚫 [API] Rate limit exceeded for:', rateLimitKey);
+      return NextResponse.json(
+        {
+          error: 'rate_limit_exceeded',
+          message: 'Too many requests. Please try again later.',
+          retryAfter: Math.ceil(rateLimit.resetIn / 1000)
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil(rateLimit.resetIn / 1000)),
+            'X-RateLimit-Remaining': '0'
+          }
+        }
       );
     }
 

@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { translations, type LanguageCode } from "../translations";
-import { BRANDING } from "@/lib/branding.config";
+import { BRANDING } from "@/lib/shared/branding.config";
 import { useTenant } from "../providers/TenantProvider";
+import { adjustColorBrightness } from "@/lib/ui/color-utils";
 
 const LANGUAGES = [
   { code: "nl", name: "Nederlands", flag: "🇳🇱" },
@@ -163,20 +164,3 @@ export const ChatHeader = ({ selectedLanguage, onLanguageChange }: ChatHeaderPro
     </header>
   );
 };
-
-// Helper function to adjust color brightness
-function adjustColorBrightness(hex: string, percent: number): string {
-  hex = hex.replace(/^#/, '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  const adjust = (value: number) => {
-    const adjusted = Math.round(value + (255 * percent) / 100);
-    return Math.max(0, Math.min(255, adjusted));
-  };
-
-  const toHex = (value: number) => value.toString(16).padStart(2, '0');
-
-  return `#${toHex(adjust(r))}${toHex(adjust(g))}${toHex(adjust(b))}`;
-}

@@ -8,8 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/supabase-client';
-import { DATABASE_CONFIG } from '@/lib/supabase/config';
+import { supabase } from '@/lib/shared/supabase/supabase-client';
+import { DATABASE_CONFIG } from '@/lib/shared/supabase/config';
 
 export async function POST(request: NextRequest) {
   console.log('👍 [Feedback API] Received feedback request');

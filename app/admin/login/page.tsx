@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { login, getCurrentUser, isAuthConfigured } from '@/lib/auth';
+import { login, getCurrentUser, isAuthConfigured } from '@/lib/shared/auth';
 
 /**
  * ========================================

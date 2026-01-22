@@ -52,15 +52,26 @@ export interface TenantCostSummary {
     total: number;
   };
 
+  // Branding stats (v2.4)
+  branding_count: number;
+
+  // Branding costs breakdown (v2.4)
+  branding_costs: {
+    fun_facts: number;
+    total: number;
+  };
+
   // Totals
   total_cost: number;
   avg_cost_per_chat: number;
   avg_cost_per_document: number;
   avg_cost_per_qa_test: number;
+  avg_cost_per_branding: number;
 
   // Activity
   last_activity: string | null;
   last_qa_test: string | null;
+  last_branding: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -124,6 +135,23 @@ export interface TenantCostDetails {
       total_questions: number;
       cost: number;
       completed_at: string;
+    }>;
+  };
+
+  // Branding (v2.4)
+  branding: {
+    count: number;
+    costs: {
+      fun_facts: number;
+      total: number;
+    };
+    last_extraction: string | null;
+    recent_extractions: Array<{
+      id: string;
+      operation_type: string;
+      source_file: string | null;
+      cost: number;
+      created_at: string;
     }>;
   };
 
@@ -197,12 +225,20 @@ export async function getAllTenantCosts(): Promise<TenantCostSummary[]> {
         evaluation: row.qa_evaluation_cost || 0,
         total: row.qa_total_cost || 0
       },
+      // Branding costs (v2.4)
+      branding_count: row.branding_count || 0,
+      branding_costs: {
+        fun_facts: row.branding_fun_facts_cost || 0,
+        total: row.branding_total_cost || 0
+      },
       total_cost: row.total_cost || 0,
       avg_cost_per_chat: row.avg_cost_per_chat || 0,
       avg_cost_per_document: row.avg_cost_per_document || 0,
       avg_cost_per_qa_test: row.avg_cost_per_qa_test || 0,
+      avg_cost_per_branding: row.avg_cost_per_branding || 0,
       last_activity: row.last_activity,
       last_qa_test: row.last_qa_test || null,
+      last_branding: row.last_branding || null,
       is_active: row.is_active,
       created_at: row.created_at
     }));
@@ -248,11 +284,18 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
     .select('tenant_id, total_cost, cost_breakdown, overall_score, completed_at, status')
     .eq('status', 'completed');
 
+  // Haal branding logs op (v2.4)
+  const { data: brandingLogs } = await supabase
+    .from('branding_logs')
+    .select('tenant_id, operation_type, cost_usd, created_at')
+    .not('tenant_id', 'is', null);
+
   // Aggregeer per tenant
   return tenants.map(tenant => {
     const tenantDocs = docLogs?.filter(d => d.tenant_id === tenant.id) || [];
     const tenantChats = chatLogs?.filter(c => c.tenant_id === tenant.id) || [];
     const tenantQATests = qaTestRuns?.filter(q => q.tenant_id === tenant.id) || [];
+    const tenantBranding = brandingLogs?.filter(b => b.tenant_id === tenant.id) || [];
 
     const docStats = {
       count: tenantDocs.length,
@@ -297,7 +340,21 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
       lastAt: latestQATest?.completed_at || null
     };
 
-    const totalCost = docStats.total + chatStats.total + qaStats.total;
+    // Branding stats (v2.4)
+    const latestBranding = tenantBranding.sort((a, b) =>
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    )[0];
+
+    const brandingStats = {
+      count: tenantBranding.length,
+      funFacts: tenantBranding
+        .filter(b => b.operation_type === 'fun_facts')
+        .reduce((sum, b) => sum + (b.cost_usd || 0), 0),
+      total: tenantBranding.reduce((sum, b) => sum + (b.cost_usd || 0), 0),
+      lastAt: latestBranding?.created_at || null
+    };
+
+    const totalCost = docStats.total + chatStats.total + qaStats.total + brandingStats.total;
 
     return {
       tenant_id: tenant.id,
@@ -328,14 +385,22 @@ async function getAllTenantCostsFallback(): Promise<TenantCostSummary[]> {
         evaluation: qaStats.evaluation,
         total: qaStats.total
       },
+      // Branding costs (v2.4)
+      branding_count: brandingStats.count,
+      branding_costs: {
+        fun_facts: brandingStats.funFacts,
+        total: brandingStats.total
+      },
       total_cost: totalCost,
       avg_cost_per_chat: chatStats.count > 0 ? chatStats.total / chatStats.count : 0,
       avg_cost_per_document: docStats.count > 0 ? docStats.total / docStats.count : 0,
       avg_cost_per_qa_test: qaStats.count > 0 ? qaStats.total / qaStats.count : 0,
-      last_activity: [docStats.lastAt, chatStats.lastAt, qaStats.lastAt]
+      avg_cost_per_branding: brandingStats.count > 0 ? brandingStats.total / brandingStats.count : 0,
+      last_activity: [docStats.lastAt, chatStats.lastAt, qaStats.lastAt, brandingStats.lastAt]
         .filter(Boolean)
         .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0] || null,
       last_qa_test: qaStats.lastAt,
+      last_branding: brandingStats.lastAt,
       is_active: tenant.is_active,
       created_at: tenant.created_at
     };
@@ -401,13 +466,22 @@ async function getTenantCostDetailsFallback(tenantId: string): Promise<TenantCos
     .eq('status', 'completed')
     .order('completed_at', { ascending: false });
 
+  // Branding logs (v2.4)
+  const { data: brandingLogs } = await supabase
+    .from('branding_logs')
+    .select('id, operation_type, source_file, cost_usd, created_at')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false });
+
   const documents = docLogs || [];
   const chats = chatLogs || [];
   const qaTests = qaTestRuns || [];
+  const brandingOps = brandingLogs || [];
 
   const docTotalCost = documents.reduce((sum, d) => sum + (d.total_cost || 0), 0);
   const chatTotalCost = chats.reduce((sum, c) => sum + (c.total_cost || 0), 0);
   const qaTotalCost = qaTests.reduce((sum, q) => sum + (q.total_cost || 0), 0);
+  const brandingTotalCost = brandingOps.reduce((sum, b) => sum + (b.cost_usd || 0), 0);
 
   return {
     tenant_id: tenant.id,
@@ -469,7 +543,25 @@ async function getTenantCostDetailsFallback(tenantId: string): Promise<TenantCos
         completed_at: q.completed_at
       }))
     },
-    total_cost: docTotalCost + chatTotalCost + qaTotalCost
+    // Branding (v2.4)
+    branding: {
+      count: brandingOps.length,
+      costs: {
+        fun_facts: brandingOps
+          .filter(b => b.operation_type === 'fun_facts')
+          .reduce((sum, b) => sum + (b.cost_usd || 0), 0),
+        total: brandingTotalCost
+      },
+      last_extraction: brandingOps.length > 0 ? brandingOps[0].created_at : null,
+      recent_extractions: brandingOps.slice(0, 5).map(b => ({
+        id: b.id,
+        operation_type: b.operation_type,
+        source_file: b.source_file,
+        cost: b.cost_usd || 0,
+        created_at: b.created_at
+      }))
+    },
+    total_cost: docTotalCost + chatTotalCost + qaTotalCost + brandingTotalCost
   };
 }
 

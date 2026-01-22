@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { getPdfUrlForTenant, getPdfUrlByFilenameForTenant, isPdfAvailable } from '@/lib/pdf-urls';
-import { BRANDING } from '@/lib/branding.config';
+import { getPdfUrlForTenant, getPdfUrlByFilenameForTenant, isPdfAvailable } from '@/lib/shared/pdf-urls';
+import { BRANDING } from '@/lib/shared/branding.config';
 import { useTenant } from '../providers/TenantProvider';
 import { translations } from '../translations';
+import { adjustColorBrightness } from '@/lib/ui/color-utils';
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -348,20 +349,3 @@ export const ChatMessage = ({ role, content, citations, logId, selectedLanguage 
     </div>
   );
 };
-
-// Helper function to adjust color brightness
-function adjustColorBrightness(hex: string, percent: number): string {
-  hex = hex.replace(/^#/, '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  const adjust = (value: number) => {
-    const adjusted = Math.round(value + (255 * percent) / 100);
-    return Math.max(0, Math.min(255, adjusted));
-  };
-
-  const toHex = (value: number) => value.toString(16).padStart(2, '0');
-
-  return `#${toHex(adjust(r))}${toHex(adjust(g))}${toHex(adjust(b))}`;
-}

@@ -10,6 +10,7 @@
  * - Content-Type: multipart/form-data
  * - file: PDF bestand (required)
  * - tenant_id: Tenant identifier (optional, uses env default)
+ * - tenant_product_id: Product identifier (optional, links doc to product)
  *
  * Response:
  * {
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const tenantIdFromForm = formData.get('tenant_id') as string | null;
+    const tenantProductId = formData.get('tenant_product_id') as string | null;
 
     // Use tenant_id from form or fallback to environment variable
     const tenantId = tenantIdFromForm || process.env.TENANT_ID;
@@ -76,13 +78,14 @@ export async function POST(request: NextRequest) {
     console.log('📁 [Upload API] File:', file.name);
     console.log('📦 [Upload API] Size:', (file.size / 1024).toFixed(1), 'KB');
     console.log('🏢 [Upload API] Tenant:', tenantId);
+    if (tenantProductId) console.log('📦 [Upload API] Product:', tenantProductId);
 
     // Convert File to Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     // Process document
-    const result = await processDocument(tenantId, file.name, buffer);
+    const result = await processDocument(tenantId, file.name, buffer, undefined, tenantProductId || undefined);
 
     if (!result.success) {
       console.log('❌ [Upload API] Processing failed:', result.error);

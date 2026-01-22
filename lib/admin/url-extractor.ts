@@ -1,11 +1,20 @@
 /**
- * URL Branding Extractor Service
+ * URL Branding Extractor Service (v3.0)
  *
  * Extracts branding information (colors, logo, company name) from a website URL.
- * Uses cheerio for HTML parsing - no heavy dependencies like Puppeteer.
+ *
+ * v3.0 Improvements:
+ * - Uses Clearbit Logo API for reliable logo extraction
+ * - Uses Google Favicon API as fallback
+ * - Still extracts colors and metadata from HTML when possible
+ * - Much more reliable for modern SPA websites
  */
 
 import * as cheerio from 'cheerio';
+
+// ========================================
+// TYPES
+// ========================================
 
 export interface ExtractedBranding {
   name: string | null;
@@ -22,10 +31,146 @@ export interface ExtractionResult {
   extracted: ExtractedBranding;
   source_url: string;
   errors: string[];
+  error_type?: 'BOT_BLOCKED' | 'RATE_LIMITED' | 'TIMEOUT' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'UNKNOWN';
 }
+
+// ========================================
+// USER-AGENT ROTATION
+// ========================================
+
+const USER_AGENTS = [
+  // Chrome on Windows
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  // Chrome on macOS
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  // Chrome on Linux
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  // Firefox on Windows
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+  // Safari on macOS
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+];
+
+function getRandomUserAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+function getBrowserHeaders(): Record<string, string> {
+  return {
+    'User-Agent': getRandomUserAgent(),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,nl;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+  };
+}
+
+// ========================================
+// RETRY LOGIC
+// ========================================
+
+async function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(
+  url: string,
+  maxRetries: number = 3
+): Promise<{ response: Response; errorType?: ExtractionResult['error_type'] }> {
+  let lastError: Error | null = null;
+  let errorType: ExtractionResult['error_type'] = 'UNKNOWN';
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`🔄 [URL Extractor] Attempt ${attempt + 1}/${maxRetries} for: ${url}`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+      const response = await fetch(url, {
+        headers: getBrowserHeaders(),
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        console.log(`✅ [URL Extractor] Fetch successful: ${response.status}`);
+        return { response };
+      }
+
+      // Handle specific error codes
+      if (response.status === 403) {
+        errorType = 'BOT_BLOCKED';
+        // Don't retry 403 - bot blocking won't change
+        console.error(`❌ [URL Extractor] HTTP 403 - Bot blocked, not retrying`);
+        throw new Error(`HTTP 403: Access denied - site is blocking automated requests`);
+      }
+
+      if (response.status === 429) {
+        errorType = 'RATE_LIMITED';
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 2000;
+        console.log(`⏳ [URL Extractor] Rate limited, waiting ${waitTime}ms...`);
+        await delay(waitTime);
+        continue;
+      }
+
+      if (response.status === 503 || response.status === 502) {
+        // Server temporarily unavailable, retry
+        console.log(`⚠️ [URL Extractor] Server error ${response.status}, retrying...`);
+        await delay(Math.pow(2, attempt) * 1000);
+        continue;
+      }
+
+      // For other errors, don't retry
+      errorType = 'NETWORK_ERROR';
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Check if this is a non-retryable error
+      if (lastError.message.includes('HTTP 403')) {
+        errorType = 'BOT_BLOCKED';
+        break; // Don't retry
+      }
+
+      if (lastError.name === 'AbortError') {
+        errorType = 'TIMEOUT';
+        console.warn(`⏱️ [URL Extractor] Request timed out`);
+      } else if (lastError.message.includes('fetch failed') || lastError.message.includes('ENOTFOUND')) {
+        errorType = 'NETWORK_ERROR';
+        console.warn(`⚠️ [URL Extractor] Network error: ${lastError.message}`);
+      }
+
+      if (attempt < maxRetries - 1 && errorType !== 'BOT_BLOCKED') {
+        const waitTime = Math.pow(2, attempt) * 500; // 500ms, 1s, 2s
+        console.log(`⏳ [URL Extractor] Waiting ${waitTime}ms before retry...`);
+        await delay(waitTime);
+      }
+    }
+  }
+
+  throw { error: lastError, errorType };
+}
+
+// ========================================
+// MAIN EXTRACTION FUNCTION
+// ========================================
 
 /**
  * Extract branding information from a website URL
+ * Uses a combination of HTML scraping and external APIs for best results
  */
 export async function extractBrandingFromUrl(url: string): Promise<ExtractionResult> {
   const errors: string[] = [];
@@ -39,55 +184,87 @@ export async function extractBrandingFromUrl(url: string): Promise<ExtractionRes
     og_image_url: null,
   };
 
+  let errorType: ExtractionResult['error_type'] | undefined;
+
   try {
     // Validate and normalize URL
     const normalizedUrl = normalizeUrl(url);
-    const baseUrl = new URL(normalizedUrl).origin;
+    const urlObj = new URL(normalizedUrl);
+    const domain = urlObj.hostname.replace(/^www\./, '');
+    const baseUrl = urlObj.origin;
 
-    console.log(`🔍 [URL Extractor] Fetching: ${normalizedUrl}`);
+    console.log(`🔍 [URL Extractor] Extracting branding for domain: ${domain}`);
 
-    // Fetch the website HTML
-    const response = await fetch(normalizedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; BrandingBot/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-      redirect: 'follow',
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // 1. FIRST: Try to get logo from Clearbit (most reliable for company logos)
+    const clearbitLogo = await getClearbitLogo(domain);
+    if (clearbitLogo) {
+      extracted.logo_url = clearbitLogo;
+      console.log(`✅ [URL Extractor] Got logo from Clearbit: ${clearbitLogo}`);
     }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    // 2. Get high-quality favicon from Google
+    extracted.favicon_url = getGoogleFavicon(domain, 128);
+    console.log(`✅ [URL Extractor] Got favicon from Google: ${extracted.favicon_url}`);
 
-    // Extract company name
-    extracted.name = extractCompanyName($);
-    console.log(`📛 [URL Extractor] Name: ${extracted.name}`);
+    // 3. Try to fetch HTML for metadata (name, colors, etc.)
+    let $ : cheerio.CheerioAPI | null = null;
+    try {
+      console.log(`🔍 [URL Extractor] Fetching HTML: ${normalizedUrl}`);
+      const { response } = await fetchWithRetry(normalizedUrl);
+      const html = await response.text();
+      $ = cheerio.load(html);
 
-    // Extract tagline/description
-    extracted.tagline = extractTagline($);
-    console.log(`📝 [URL Extractor] Tagline: ${extracted.tagline?.substring(0, 50)}...`);
+      // Extract company name
+      extracted.name = extractCompanyName($);
+      console.log(`📛 [URL Extractor] Name: ${extracted.name}`);
 
-    // Extract primary color from meta theme-color
-    extracted.primary_color = extractPrimaryColor($);
-    console.log(`🎨 [URL Extractor] Primary color: ${extracted.primary_color}`);
+      // Extract tagline/description
+      extracted.tagline = extractTagline($);
+      console.log(`📝 [URL Extractor] Tagline: ${extracted.tagline?.substring(0, 50)}...`);
 
-    // Extract secondary color (from CSS or computed)
-    extracted.secondary_color = extractSecondaryColor($, extracted.primary_color);
-    console.log(`🎨 [URL Extractor] Secondary color: ${extracted.secondary_color}`);
+      // Extract primary color from meta theme-color
+      extracted.primary_color = extractPrimaryColor($);
+      console.log(`🎨 [URL Extractor] Primary color from HTML: ${extracted.primary_color}`);
 
-    // Extract favicon
-    extracted.favicon_url = extractFavicon($, baseUrl);
-    console.log(`🖼️ [URL Extractor] Favicon: ${extracted.favicon_url}`);
+      // Extract og:image
+      extracted.og_image_url = extractOgImage($, baseUrl);
 
-    // Extract logo (og:image or explicit logo)
-    extracted.logo_url = extractLogo($, baseUrl);
-    console.log(`🖼️ [URL Extractor] Logo: ${extracted.logo_url}`);
+      // If no Clearbit logo, try HTML extraction
+      if (!extracted.logo_url) {
+        extracted.logo_url = extractLogo($, baseUrl);
+        if (extracted.logo_url) {
+          console.log(`🖼️ [URL Extractor] Logo from HTML: ${extracted.logo_url}`);
+        }
+      }
 
-    // Extract og:image separately
-    extracted.og_image_url = extractOgImage($, baseUrl);
+    } catch (htmlError: unknown) {
+      const msg = htmlError instanceof Error ? htmlError.message : String(htmlError);
+      console.warn(`⚠️ [URL Extractor] HTML fetch failed: ${msg}`);
+      errors.push(`HTML extraction failed: ${msg}`);
+
+      // Fallback: use domain as name
+      extracted.name = formatDomainAsName(domain);
+      console.log(`📛 [URL Extractor] Using domain as name: ${extracted.name}`);
+    }
+
+    // 4. Fallback: use favicon as logo if still no logo
+    if (!extracted.logo_url && extracted.favicon_url) {
+      console.log(`🔄 [URL Extractor] Using Google favicon as logo`);
+      extracted.logo_url = extracted.favicon_url;
+    }
+
+    // 5. Compute secondary color if we have primary
+    if (extracted.primary_color) {
+      extracted.secondary_color = extractSecondaryColor($ as cheerio.CheerioAPI, extracted.primary_color);
+      console.log(`🎨 [URL Extractor] Secondary color: ${extracted.secondary_color}`);
+    }
+
+    // 6. Generate a color from domain if no color found
+    if (!extracted.primary_color) {
+      extracted.primary_color = generateColorFromDomain(domain);
+      extracted.secondary_color = computeSecondaryColor(extracted.primary_color);
+      console.log(`🎨 [URL Extractor] Generated color from domain: ${extracted.primary_color}`);
+    }
 
     return {
       success: true,
@@ -96,18 +273,100 @@ export async function extractBrandingFromUrl(url: string): Promise<ExtractionRes
       errors,
     };
 
-  } catch (error: any) {
-    console.error(`❌ [URL Extractor] Error:`, error.message);
-    errors.push(error.message);
+  } catch (error: unknown) {
+    // Handle retry error with type
+    if (typeof error === 'object' && error !== null && 'errorType' in error) {
+      const retryError = error as { error: Error; errorType: ExtractionResult['error_type'] };
+      errorType = retryError.errorType;
+      const message = retryError.error?.message || 'Unknown error';
+      console.error(`❌ [URL Extractor] Error (${errorType}):`, message);
+      errors.push(message);
+    } else {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`❌ [URL Extractor] Error:`, message);
+      errors.push(message);
+      errorType = 'UNKNOWN';
+    }
 
     return {
       success: false,
       extracted,
       source_url: url,
       errors,
+      error_type: errorType,
     };
   }
 }
+
+// ========================================
+// EXTERNAL API HELPERS
+// ========================================
+
+/**
+ * Get logo from Clearbit Logo API (free, no API key required)
+ * Returns null if logo not found
+ */
+async function getClearbitLogo(domain: string): Promise<string | null> {
+  const logoUrl = `https://logo.clearbit.com/${domain}`;
+
+  try {
+    // Check if the logo exists with a HEAD request
+    const response = await fetch(logoUrl, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (response.ok) {
+      return logoUrl;
+    }
+    return null;
+  } catch {
+    console.log(`⚠️ [URL Extractor] Clearbit logo not available for ${domain}`);
+    return null;
+  }
+}
+
+/**
+ * Get high-quality favicon from Google's favicon service
+ */
+function getGoogleFavicon(domain: string, size: number = 128): string {
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`;
+}
+
+/**
+ * Format domain as a readable company name
+ */
+function formatDomainAsName(domain: string): string {
+  // Remove TLD and format
+  const parts = domain.split('.');
+  const name = parts[0];
+  // Capitalize first letter
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/**
+ * Generate a consistent color from domain name (for fallback)
+ */
+function generateColorFromDomain(domain: string): string {
+  // Simple hash function to generate a hue from domain
+  let hash = 0;
+  for (let i = 0; i < domain.length; i++) {
+    hash = domain.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // Convert to a pleasant color (avoid very light or very dark)
+  const hue = Math.abs(hash % 360);
+  const saturation = 65 + (Math.abs(hash >> 8) % 20); // 65-85%
+  const lightness = 45 + (Math.abs(hash >> 16) % 15); // 45-60%
+
+  // Convert HSL to hex
+  const rgb = hslToRgb(hue / 360, saturation / 100, lightness / 100);
+  return rgbToHex(rgb.r, rgb.g, rgb.b);
+}
+
+// ========================================
+// URL HELPERS
+// ========================================
 
 /**
  * Normalize URL (add https:// if missing)
@@ -119,6 +378,26 @@ function normalizeUrl(url: string): string {
   }
   return url;
 }
+
+/**
+ * Resolve relative URLs to absolute
+ */
+function resolveUrl(url: string, baseUrl: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  if (url.startsWith('//')) {
+    return 'https:' + url;
+  }
+  if (url.startsWith('/')) {
+    return baseUrl + url;
+  }
+  return baseUrl + '/' + url;
+}
+
+// ========================================
+// NAME & TAGLINE EXTRACTION
+// ========================================
 
 /**
  * Extract company name from various sources
@@ -174,6 +453,10 @@ function extractTagline($: cheerio.CheerioAPI): string | null {
   return null;
 }
 
+// ========================================
+// COLOR EXTRACTION
+// ========================================
+
 /**
  * Extract primary color from meta tags or CSS
  */
@@ -195,7 +478,6 @@ function extractPrimaryColor($: cheerio.CheerioAPI): string | null {
   if (inlineColor) return inlineColor;
 
   // 4. Find most common non-neutral color from CSS
-  const allColors = findAllColorsInStyles($);
   const colorCounts = countColorOccurrences($);
 
   // Sort by frequency and find first non-neutral color
@@ -334,8 +616,6 @@ function findColorInStyles($: cheerio.CheerioAPI): string | null {
   for (const selector of selectors) {
     const element = $(selector).first();
     const style = element.attr('style') || '';
-    const bgColor = element.css('background-color') || '';
-    const color = element.css('color') || '';
 
     // Check for hex colors in style attribute
     const hexMatch = style.match(/#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})\b/);
@@ -353,28 +633,9 @@ function findColorInStyles($: cheerio.CheerioAPI): string | null {
   return null;
 }
 
-/**
- * Find all colors in styles
- */
-function findAllColorsInStyles($: cheerio.CheerioAPI): string[] {
-  const colors: string[] = [];
-
-  // Look for style tags
-  $('style').each((_, el) => {
-    const css = $(el).text();
-    const hexMatches = css.match(/#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})\b/g);
-    if (hexMatches) {
-      hexMatches.forEach(color => {
-        const normalized = normalizeHexColor(color);
-        if (!colors.includes(normalized)) {
-          colors.push(normalized);
-        }
-      });
-    }
-  });
-
-  return colors.slice(0, 10); // Limit to first 10
-}
+// ========================================
+// FAVICON EXTRACTION
+// ========================================
 
 /**
  * Extract favicon URL
@@ -401,34 +662,63 @@ function extractFavicon($: cheerio.CheerioAPI, baseUrl: string): string | null {
   return `${baseUrl}/favicon.ico`;
 }
 
+// ========================================
+// LOGO EXTRACTION (with SVG support)
+// ========================================
+
 /**
- * Extract logo URL
+ * Extract logo URL - supports img tags, SVG elements, and CSS backgrounds
  */
 function extractLogo($: cheerio.CheerioAPI, baseUrl: string): string | null {
-  // Look for explicit logo elements - priority order
+  // 1. Try to find explicit logo images
+  const imgLogo = extractLogoFromImg($, baseUrl);
+  if (imgLogo) return imgLogo;
+
+  // 2. Try to find SVG logos
+  const svgLogo = extractLogoFromSvg($);
+  if (svgLogo) return svgLogo;
+
+  // 3. Try to find logos in CSS background-image
+  const cssLogo = extractLogoFromCss($, baseUrl);
+  if (cssLogo) return cssLogo;
+
+  // 4. Fall back to og:image if no explicit logo found
+  return extractOgImage($, baseUrl);
+}
+
+/**
+ * Extract logo from img tags
+ */
+function extractLogoFromImg($: cheerio.CheerioAPI, baseUrl: string): string | null {
   const logoSelectors = [
     // High priority: explicit logo classes/ids
-    'img[class*="logo"]',
-    'img[id*="logo"]',
+    'img[class*="logo" i]',
+    'img[id*="logo" i]',
     '.logo img',
     '#logo img',
-    '[class*="logo"] img',
-    '[id*="logo"] img',
+    '[class*="logo" i] img',
+    '[id*="logo" i] img',
     // Medium priority: alt text
     'img[alt*="logo" i]',
+    // Brand-related
+    '.brand img',
+    '[class*="brand" i] img',
+    '.site-branding img',
     // Lower priority: header/nav images
     'header img:first-of-type',
     'nav img:first-of-type',
     '.header img:first-of-type',
     '.navbar img:first-of-type',
-    '.site-branding img',
-    '.brand img',
   ];
 
   for (const selector of logoSelectors) {
     try {
       const src = $(selector).first().attr('src');
-      if (src && !src.includes('data:') && !src.includes('gravatar')) {
+      if (src && !src.includes('gravatar') && !src.includes('avatar')) {
+        // Allow data URIs for inline images
+        if (src.startsWith('data:image/')) {
+          return src;
+        }
         return resolveUrl(src, baseUrl);
       }
     } catch {
@@ -440,16 +730,119 @@ function extractLogo($: cheerio.CheerioAPI, baseUrl: string): string | null {
   let logoFromUrl: string | null = null;
   $('img').each((_, el) => {
     const src = $(el).attr('src') || '';
-    if (src && src.toLowerCase().includes('logo') && !src.includes('data:')) {
+    if (src && src.toLowerCase().includes('logo') && !src.includes('gravatar')) {
       if (!logoFromUrl) {
-        logoFromUrl = resolveUrl(src, baseUrl);
+        if (src.startsWith('data:image/')) {
+          logoFromUrl = src;
+        } else {
+          logoFromUrl = resolveUrl(src, baseUrl);
+        }
       }
     }
   });
-  if (logoFromUrl) return logoFromUrl;
 
-  // Fall back to og:image if no explicit logo found
-  return extractOgImage($, baseUrl);
+  return logoFromUrl;
+}
+
+/**
+ * Extract logo from inline SVG elements
+ */
+function extractLogoFromSvg($: cheerio.CheerioAPI): string | null {
+  const svgSelectors = [
+    // Explicit logo SVGs
+    'svg[class*="logo" i]',
+    'svg[id*="logo" i]',
+    '[class*="logo" i] svg',
+    '[id*="logo" i] svg',
+    // Brand SVGs
+    '.brand svg',
+    '[class*="brand" i] svg',
+    '.site-branding svg',
+    // Header/nav SVGs (often logos)
+    'header svg:first-of-type',
+    'nav svg:first-of-type',
+    '.header svg:first-of-type',
+    '.navbar svg:first-of-type',
+    // Link with logo class containing SVG
+    'a[class*="logo" i] svg',
+    'a[id*="logo" i] svg',
+  ];
+
+  for (const selector of svgSelectors) {
+    try {
+      const svgElement = $(selector).first();
+      if (svgElement.length > 0) {
+        // Get the SVG's outer HTML
+        const svgHtml = $.html(svgElement);
+        if (svgHtml && svgHtml.length > 50 && svgHtml.length < 50000) {
+          // Convert to data URI
+          const base64 = Buffer.from(svgHtml).toString('base64');
+          console.log(`🎨 [URL Extractor] Found inline SVG logo (${svgHtml.length} chars)`);
+          return `data:image/svg+xml;base64,${base64}`;
+        }
+      }
+    } catch {
+      // Selector might be invalid, continue
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract logo from CSS background-image
+ */
+function extractLogoFromCss($: cheerio.CheerioAPI, baseUrl: string): string | null {
+  // Check elements with background-image in style attribute
+  const bgSelectors = [
+    '[class*="logo" i][style*="background"]',
+    '[id*="logo" i][style*="background"]',
+    '.brand[style*="background"]',
+    '.site-branding[style*="background"]',
+  ];
+
+  for (const selector of bgSelectors) {
+    try {
+      const element = $(selector).first();
+      const style = element.attr('style') || '';
+      const urlMatch = style.match(/url\(['"]?([^'")\s]+)['"]?\)/i);
+      if (urlMatch && urlMatch[1]) {
+        const url = urlMatch[1];
+        if (url.startsWith('data:image/')) {
+          return url;
+        }
+        if (url.toLowerCase().includes('logo') || selector.includes('logo')) {
+          return resolveUrl(url, baseUrl);
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  // Check style tags for logo background URLs
+  let cssLogoUrl: string | null = null;
+  $('style').each((_, el) => {
+    if (cssLogoUrl) return;
+
+    const css = $(el).text();
+    // Look for classes containing "logo" with background-image
+    const logoPattern = /\.[\w-]*logo[\w-]*\s*\{[^}]*background(?:-image)?:\s*url\(['"]?([^'")\s]+)['"]?\)/gi;
+    const matches = css.matchAll(logoPattern);
+
+    for (const match of matches) {
+      if (match[1] && !cssLogoUrl) {
+        const url = match[1];
+        if (url.startsWith('data:image/')) {
+          cssLogoUrl = url;
+        } else {
+          cssLogoUrl = resolveUrl(url, baseUrl);
+        }
+      }
+    }
+  });
+
+  return cssLogoUrl;
 }
 
 /**
@@ -469,21 +862,9 @@ function extractOgImage($: cheerio.CheerioAPI, baseUrl: string): string | null {
   return null;
 }
 
-/**
- * Resolve relative URLs to absolute
- */
-function resolveUrl(url: string, baseUrl: string): string {
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url;
-  }
-  if (url.startsWith('//')) {
-    return 'https:' + url;
-  }
-  if (url.startsWith('/')) {
-    return baseUrl + url;
-  }
-  return baseUrl + '/' + url;
-}
+// ========================================
+// COLOR UTILITIES
+// ========================================
 
 /**
  * Validate hex color

@@ -4,20 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**HR Assistant AI** (v2.2.0) is a **production-ready multi-tenant** Next.js 15 application that implements a multi-language HR assistant using RAG (Retrieval-Augmented Generation). The bot answers questions about HR policies, procedures, and employee benefits based on uploaded documentation.
+**HR Assistant AI** (v2.3.0) is a **production-ready multi-tenant** Next.js 15 application that implements a multi-language HR assistant using RAG (Retrieval-Augmented Generation). The bot answers questions about HR policies, procedures, and employee benefits based on uploaded documentation.
 
-### Key Features (v2.2)
+### Key Features (v2.3)
 
 - **Supabase pgvector RAG**: Full vector search with embeddings (replaced Pinecone in v2.1)
 - **Admin Dashboard**: Complete tenant management, branding, costs, and analytics
+- **Customer Portal**: Self-service portal for end-clients with product management
 - **Multi-Tenant Architecture**: Isolated data per client with middleware-based detection
 - **12 Language Support**: With automatic query translation for non-English queries
 - **Smart Chunking**: Multiple strategies (fixed, smart, semantic) for document processing
 - **Cohere Reranking**: Optional reranking for improved search relevance
+- **Rate Limiting**: Built-in protection against API abuse
 - **Comprehensive Logging**: `rag_details` JSONB with 200+ fields for debugging
 
-**Original Client**: GeoStick (production instance running since v1.0)
-**Current Version**: v2.2.0 - White-label template with Supabase RAG
+**Current Version**: v2.3.0 - Multi-tenant SaaS platform with Customer Portal
 
 ## Development Commands
 

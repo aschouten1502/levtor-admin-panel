@@ -86,57 +86,78 @@ interface PDFExtractionResult {
 }
 
 /**
- * Extraheert tekst uit een PDF buffer
- * Gebruikt pdf-parse v1.x voor server-side processing
+ * Extraheert tekst uit een PDF buffer, PER PAGINA met echte paginanummers.
  *
- * BELANGRIJK: Returns zowel geëxtraheerde pagina's als de ECHTE page count
- * De pages array kan kleiner zijn (lege pagina's worden gefilterd)
- * maar totalPages is altijd de werkelijke PDF page count
+ * Gebruikt pdf-parse met custom page rendering om tekst per pagina te extraheren.
+ * Dit is compatible met Node.js/Next.js server-side rendering.
  */
 async function extractTextFromPDF(
   buffer: Buffer
 ): Promise<PDFExtractionResult> {
-  // pdf-parse v1.x - directe functie call (geen workers nodig)
+  console.log('📖 [Processor] Parsing PDF with per-page extraction...');
+
+  // Import pdf-parse dynamically to avoid issues with Next.js bundling
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pdfParse = require('pdf-parse');
 
-  console.log('📖 [Processor] Parsing PDF...');
-
-  const pdfData = await pdfParse(buffer);
-
-  // BELANGRIJK: Gebruik de ECHTE page count van de PDF metadata
-  const totalPages = pdfData.numpages || 1;
-
-  // v1.x geeft { text, numpages, info } terug
-  const fullText = pdfData.text || '';
-
-  // Split op form feed (\f) of meerdere newlines (pagina-einde indicatie)
-  const pageTexts = fullText.split(/\f|\n{4,}/);
-
+  // Collect pages during parsing using custom page render
   const pages: Array<{ pageNumber: number; text: string }> = [];
+  let currentPage = 0;
 
-  pageTexts.forEach((pageText: string, idx: number) => {
-    const trimmed = pageText.trim();
-    if (trimmed.length > 0) {
-      pages.push({
-        pageNumber: idx + 1,
-        text: trimmed
-      });
+  // Custom page render function to extract text per page
+  const pagerender = async (pageData: { getTextContent: () => Promise<{ items: Array<{ str?: string; transform?: number[]; hasEOL?: boolean }> }> }) => {
+    currentPage++;
+    const pageNum = currentPage;
+
+    try {
+      const textContent = await pageData.getTextContent();
+
+      // Combine all text items from the page
+      // Preserve spacing by checking position changes
+      let pageText = '';
+      let lastY: number | null = null;
+
+      for (const item of textContent.items) {
+        if (item.str !== undefined) {
+          const currentY = item.transform ? item.transform[5] : 0;
+
+          // Add newline when moving to a new line
+          if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+            pageText += '\n';
+          } else if (pageText.length > 0 && !pageText.endsWith(' ') && !pageText.endsWith('\n')) {
+            pageText += ' ';
+          }
+
+          pageText += item.str;
+          lastY = currentY;
+
+          if (item.hasEOL) {
+            pageText += '\n';
+          }
+        }
+      }
+
+      const trimmed = pageText.trim();
+      if (trimmed.length > 0) {
+        pages.push({
+          pageNumber: pageNum,
+          text: trimmed
+        });
+      }
+
+      return trimmed;
+    } catch (pageError) {
+      console.warn(`⚠️ [Processor] Could not extract text from page ${pageNum}:`, pageError);
+      return '';
     }
-  });
+  };
 
-  console.log(`✅ [Processor] Extracted ${pages.length} text segments from ${totalPages} PDF pages`);
+  // Parse PDF with custom page renderer
+  const pdfData = await pdfParse(buffer, { pagerender });
+  const totalPages = pdfData.numpages;
 
-  // Fallback: als geen pagina's gevonden, gebruik volledige tekst
-  if (pages.length === 0 && fullText.trim().length > 0) {
-    return {
-      pages: [{
-        pageNumber: 1,
-        text: fullText.trim()
-      }],
-      totalPages
-    };
-  }
+  console.log(`📄 [Processor] PDF has ${totalPages} pages`);
+  console.log(`✅ [Processor] Extracted text from ${pages.length} of ${totalPages} pages`);
 
   if (pages.length === 0) {
     throw new Error('No text content could be extracted from PDF');
@@ -162,13 +183,15 @@ export async function processDocument(
   tenantId: string,
   filename: string,
   fileBuffer: Buffer,
-  filePath?: string
+  filePath?: string,
+  tenantProductId?: string
 ): Promise<ProcessingResult> {
   const supabase = getSupabaseClient();
 
   console.log('\n📄 [Processor] ========== PROCESSING DOCUMENT ==========');
   console.log('📁 [Processor] File:', filename);
   console.log('🏢 [Processor] Tenant:', tenantId);
+  if (tenantProductId) console.log('📦 [Processor] Product:', tenantProductId);
   console.log('📦 [Processor] Size:', (fileBuffer.length / 1024).toFixed(1), 'KB');
 
   let documentId: string | undefined;
@@ -198,6 +221,7 @@ export async function processDocument(
       .from('documents')
       .insert({
         tenant_id: tenantId,
+        tenant_product_id: tenantProductId || null,
         filename,
         file_path: filePath,
         file_size: fileBuffer.length,

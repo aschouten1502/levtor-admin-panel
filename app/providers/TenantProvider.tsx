@@ -28,7 +28,8 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { TenantConfig, LanguageTexts, UITexts, LanguageCode } from '@/lib/tenant-config';
+import type { TenantConfig, LanguageTexts, UITexts, LanguageCode } from '@/lib/shared/tenant-config';
+import { adjustColorBrightness } from '@/lib/ui/color-utils';
 
 // Re-export types for backwards compatibility
 export type { TenantConfig, LanguageTexts, UITexts, LanguageCode };
@@ -126,22 +127,6 @@ function injectCssVariables(config: TenantConfig): void {
   root.style.setProperty('--scrollbar-color-hover', config.primary_color);
 
   console.log(`[TenantProvider] CSS variables injected for ${config.name}`);
-}
-
-function adjustColorBrightness(hex: string, percent: number): string {
-  hex = hex.replace(/^#/, '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  const adjust = (value: number) => {
-    const adjusted = Math.round(value + (255 * percent) / 100);
-    return Math.max(0, Math.min(255, adjusted));
-  };
-
-  const toHex = (value: number) => value.toString(16).padStart(2, '0');
-
-  return `#${toHex(adjust(r))}${toHex(adjust(g))}${toHex(adjust(b))}`;
 }
 
 // ========================================

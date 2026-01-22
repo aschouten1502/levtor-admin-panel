@@ -11,7 +11,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { DATABASE_CONFIG } from '@/lib/supabase/config';
+import { DATABASE_CONFIG } from '@/lib/shared/supabase/config';
 
 // ========================================
 // TYPES

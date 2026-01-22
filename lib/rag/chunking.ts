@@ -110,9 +110,10 @@ export async function smartChunkDocument(
     smart: opts.enableSmartBoundaries
   });
 
-  // 1. Combineer alle pagina's tot één tekst
-  const fullText = combinePages(pages);
+  // 1. Combineer alle pagina's tot één tekst MET boundary tracking
+  const { fullText, boundaries } = combinePages(pages);
   console.log(`📏 [SmartChunk] Total text: ${fullText.length} chars`);
+  console.log(`📄 [SmartChunk] Page boundaries tracked: ${boundaries.length} pages`);
 
   if (fullText.length === 0) {
     return {
@@ -152,10 +153,12 @@ export async function smartChunkDocument(
   console.log(`📦 [SmartChunk] Created ${rawChunks.length} raw chunks`);
 
   // 4. Converteer naar StructuredChunks met metadata
+  // Gebruik de boundaries voor correcte paginanummer toewijzing
   const structuredChunks = rawChunks.map((content, idx) => {
     const trimmedContent = content.trim();
     const startChar = findChunkStartPosition(fullText, trimmedContent, idx);
-    const pageNumber = findPageForPosition(pages, startChar);
+    // FIXED: Gebruik boundaries in plaats van pages array
+    const pageNumber = findPageForPosition(boundaries, startChar);
 
     // Zoek structuur voor deze chunk
     const structure = opts.enableStructureDetection
@@ -349,13 +352,52 @@ function legacyChunk(text: string, opts: SmartChunkingOptions): string[] {
 // ========================================
 
 /**
- * Combineert pagina's tot één tekst met page markers
+ * Page boundary tracking voor correcte paginanummer toewijzing
  */
-function combinePages(pages: Array<{ pageNumber: number; text: string }>): string {
-  return pages
-    .map(p => p.text.trim())
-    .filter(t => t.length > 0)
-    .join('\n\n');
+interface PageBoundary {
+  pageNumber: number;
+  startPos: number;
+  endPos: number;
+}
+
+/**
+ * Result type voor combinePages met boundary tracking
+ */
+interface CombinedPagesResult {
+  fullText: string;
+  boundaries: PageBoundary[];
+}
+
+/**
+ * Combineert pagina's tot één tekst EN trackt de boundaries.
+ * Dit is cruciaal voor correcte paginanummer toewijzing aan chunks.
+ */
+function combinePages(pages: Array<{ pageNumber: number; text: string }>): CombinedPagesResult {
+  const boundaries: PageBoundary[] = [];
+  let currentPos = 0;
+
+  const textParts: string[] = [];
+
+  for (const page of pages) {
+    const trimmedText = page.text.trim();
+    if (trimmedText.length === 0) continue;
+
+    const startPos = currentPos;
+    const endPos = currentPos + trimmedText.length;
+
+    boundaries.push({
+      pageNumber: page.pageNumber,
+      startPos,
+      endPos
+    });
+
+    textParts.push(trimmedText);
+    currentPos = endPos + 2; // +2 voor de \n\n separator
+  }
+
+  const fullText = textParts.join('\n\n');
+
+  return { fullText, boundaries };
 }
 
 /**
@@ -369,23 +411,42 @@ function findChunkStartPosition(fullText: string, chunkContent: string, chunkInd
 }
 
 /**
- * Bepaalt paginanummer voor een positie in de gecombineerde tekst
+ * Bepaalt paginanummer voor een positie in de gecombineerde tekst.
+ * Gebruikt de pre-computed boundaries voor accurate lookup.
  */
 function findPageForPosition(
+  boundaries: PageBoundary[],
+  position: number
+): number | undefined {
+  // Binary search zou efficiënter zijn, maar voor de meeste documenten
+  // is linear search snel genoeg (< 1000 pagina's)
+  for (const boundary of boundaries) {
+    // Check of positie binnen deze pagina valt
+    // We gebruiken boundary.endPos + 2 om de \n\n separator mee te nemen
+    if (position >= boundary.startPos && position <= boundary.endPos + 2) {
+      return boundary.pageNumber;
+    }
+  }
+
+  // Fallback: als positie voorbij laatste boundary, return laatste pagina
+  if (boundaries.length > 0 && position > boundaries[boundaries.length - 1].endPos) {
+    return boundaries[boundaries.length - 1].pageNumber;
+  }
+
+  // Fallback: eerste pagina als er boundaries zijn
+  return boundaries.length > 0 ? boundaries[0].pageNumber : undefined;
+}
+
+/**
+ * Legacy wrapper voor backwards compatibility
+ * @deprecated Gebruik findPageForPosition met boundaries in plaats van pages array
+ */
+function findPageForPositionLegacy(
   pages: Array<{ pageNumber: number; text: string }>,
   position: number
 ): number | undefined {
-  let currentPos = 0;
-
-  for (const page of pages) {
-    const pageEnd = currentPos + page.text.length + 2; // +2 voor \n\n
-    if (position < pageEnd) {
-      return page.pageNumber;
-    }
-    currentPos = pageEnd;
-  }
-
-  return pages.length > 0 ? pages[pages.length - 1].pageNumber : undefined;
+  const { boundaries } = combinePages(pages);
+  return findPageForPosition(boundaries, position);
 }
 
 /**

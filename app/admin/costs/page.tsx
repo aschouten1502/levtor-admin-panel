@@ -73,9 +73,11 @@ export default function CostsPage() {
   const totalDocCost = costs.reduce((sum, t) => sum + t.doc_costs.total, 0);
   const totalChatCost = costs.reduce((sum, t) => sum + t.chat_costs.total, 0);
   const totalQACost = costs.reduce((sum, t) => sum + (t.qa_costs?.total || 0), 0);
+  const totalBrandingCost = costs.reduce((sum, t) => sum + (t.branding_costs?.total || 0), 0);
   const totalDocs = costs.reduce((sum, t) => sum + t.document_count, 0);
   const totalChats = costs.reduce((sum, t) => sum + t.chat_count, 0);
   const totalQATests = costs.reduce((sum, t) => sum + (t.qa_test_count || 0), 0);
+  const totalBranding = costs.reduce((sum, t) => sum + (t.branding_count || 0), 0);
 
   if (loading) {
     return (
@@ -121,7 +123,7 @@ export default function CostsPage() {
         </div>
 
         {/* Global Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-8">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-500">Totale Kosten</div>
             <div className="text-2xl font-bold text-gray-900">{formatCost(totalCost)}</div>
@@ -139,6 +141,10 @@ export default function CostsPage() {
             <div className="text-2xl font-bold text-purple-600">{formatCost(totalQACost)}</div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-500">Branding Kosten</div>
+            <div className="text-2xl font-bold text-pink-600">{formatCost(totalBrandingCost)}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-500">Documenten</div>
             <div className="text-2xl font-bold text-gray-900">{totalDocs}</div>
           </div>
@@ -149,6 +155,10 @@ export default function CostsPage() {
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-500">QA Tests</div>
             <div className="text-2xl font-bold text-gray-900">{totalQATests}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-500">Branding Ops</div>
+            <div className="text-2xl font-bold text-gray-900">{totalBranding}</div>
           </div>
         </div>
 
@@ -377,6 +387,30 @@ export default function CostsPage() {
                           <div className="flex justify-between font-semibold text-purple-700 pt-1">
                             <span>Total:</span>
                             <span>{formatCost(tenantDetails.qa_tests.costs.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Branding Costs */}
+                    {tenantDetails.branding && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                          <span className="mr-2">🎨</span> Branding
+                        </h3>
+                        <div className="bg-pink-50 rounded-lg p-3 space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Total Extractions:</span>
+                            <span className="font-medium">{tenantDetails.branding.count}</span>
+                          </div>
+                          <hr className="my-2 border-pink-200" />
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Fun Facts:</span>
+                            <span>{formatCost(tenantDetails.branding.costs.fun_facts)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-pink-700 pt-1">
+                            <span>Total:</span>
+                            <span>{formatCost(tenantDetails.branding.costs.total)}</span>
                           </div>
                         </div>
                       </div>

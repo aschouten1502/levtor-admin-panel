@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantConfig, getTenantCssVariables } from '@/lib/tenant-config';
+import { getTenantConfig, getTenantCssVariables } from '@/lib/shared/tenant-config';
 
 export async function GET(request: NextRequest) {
   // Get tenant ID - query param takes priority for embed pages

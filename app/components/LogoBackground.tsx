@@ -1,6 +1,6 @@
 'use client';
 
-import { BRANDING } from '@/lib/branding.config';
+import { BRANDING } from '@/lib/shared/branding.config';
 import { useTenant } from '../providers/TenantProvider';
 
 // ========================================

@@ -30,8 +30,8 @@ interface NavGroup {
   items: NavItem[];
 }
 
-// HR QA Bot menu items
-const hrQaBotItems: NavItem[] = [
+// Platform items (global)
+const platformItems: NavItem[] = [
   {
     href: '/admin',
     label: 'Dashboard',
@@ -42,7 +42,38 @@ const hrQaBotItems: NavItem[] = [
     ),
   },
   {
-    href: '/admin/tenants',
+    href: '/admin/klanten',
+    label: 'Klanten',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/costs',
+    label: 'Kosten',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+];
+
+// HR Bot items (product-specific) - Now under /admin/products/hr-bot/
+const hrBotItems: NavItem[] = [
+  {
+    href: '/admin/products/hr-bot',
+    label: 'Overzicht',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/products/hr-bot/tenants',
     label: 'Tenants',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,16 +82,7 @@ const hrQaBotItems: NavItem[] = [
     ),
   },
   {
-    href: '/admin/tenants/new',
-    label: 'New Tenant',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-      </svg>
-    ),
-  },
-  {
-    href: '/admin/branding',
+    href: '/admin/products/hr-bot/branding',
     label: 'Branding',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,7 +91,7 @@ const hrQaBotItems: NavItem[] = [
     ),
   },
   {
-    href: '/admin/logs',
+    href: '/admin/products/hr-bot/logs',
     label: 'Logs',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,16 +100,7 @@ const hrQaBotItems: NavItem[] = [
     ),
   },
   {
-    href: '/admin/costs',
-    label: 'Costs',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/admin/test',
+    href: '/admin/products/hr-bot/test',
     label: 'QA Testing',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,7 +109,7 @@ const hrQaBotItems: NavItem[] = [
     ),
   },
   {
-    href: '/admin/implement',
+    href: '/admin/products/hr-bot/implement',
     label: 'Implementeren',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,14 +122,24 @@ const hrQaBotItems: NavItem[] = [
 // Navigation groups
 const navGroups: NavGroup[] = [
   {
-    id: 'hr-qa-bot',
-    label: 'HR QA Bot',
+    id: 'platform',
+    label: 'Platform',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+      </svg>
+    ),
+    items: platformItems,
+  },
+  {
+    id: 'hr-bot',
+    label: 'HR Bot',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
     ),
-    items: hrQaBotItems,
+    items: hrBotItems,
   },
 ];
 

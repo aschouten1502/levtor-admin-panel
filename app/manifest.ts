@@ -8,7 +8,7 @@
  */
 
 import { MetadataRoute } from 'next';
-import { BRANDING } from '@/lib/branding.config';
+import { BRANDING } from '@/lib/shared/branding.config';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
