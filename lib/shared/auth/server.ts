@@ -65,12 +65,9 @@ function filterCookiesByContext(
 
   const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY : CUSTOMER_STORAGE_KEY;
 
-  // Filter cookies that match the storage key pattern
-  // Also include sb-<project-ref> cookies for Supabase internal use
-  return allCookies.filter(cookie => {
-    return cookie.name.startsWith(storageKey) ||
-           cookie.name.startsWith('sb-') && !cookie.name.startsWith('sb-admin-') && !cookie.name.startsWith('sb-customer-');
-  });
+  // Only return cookies that belong to this specific context
+  // This prevents session contamination between admin and customer sessions
+  return allCookies.filter(cookie => cookie.name.startsWith(storageKey));
 }
 
 /**
