@@ -19,8 +19,16 @@ import {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   AUTH_CONFIG,
+  ADMIN_STORAGE_KEY,
+  CUSTOMER_STORAGE_KEY,
   isAuthConfigured,
 } from './config';
+
+// ========================================
+// AUTH CONTEXT TYPES
+// ========================================
+
+export type AuthContext = 'admin' | 'customer' | 'any';
 
 // ========================================
 // TYPES
@@ -43,21 +51,54 @@ export interface AuthResult {
 // ========================================
 
 /**
+ * Helper to filter cookies by context
+ * Each context (admin/customer) has its own cookie namespace
+ */
+function filterCookiesByContext(
+  allCookies: { name: string; value: string }[],
+  context: AuthContext
+): { name: string; value: string }[] {
+  if (context === 'any') {
+    // Return all cookies (legacy behavior)
+    return allCookies;
+  }
+
+  const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY : CUSTOMER_STORAGE_KEY;
+
+  // Filter cookies that match the storage key pattern
+  // Also include sb-<project-ref> cookies for Supabase internal use
+  return allCookies.filter(cookie => {
+    return cookie.name.startsWith(storageKey) ||
+           cookie.name.startsWith('sb-') && !cookie.name.startsWith('sb-admin-') && !cookie.name.startsWith('sb-customer-');
+  });
+}
+
+/**
  * Maak een Supabase client voor Server Components
  * Gebruikt cookies() van next/headers
+ *
+ * @param context - 'admin' | 'customer' | 'any' - determines which session to use
  */
-export async function createServerSupabaseClient() {
+export async function createServerSupabaseClient(context: AuthContext = 'any') {
   if (!isAuthConfigured()) {
     console.warn('⚠️ [Auth] Supabase auth not configured');
     return null;
   }
 
   const cookieStore = await cookies();
+  const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY :
+                     context === 'customer' ? CUSTOMER_STORAGE_KEY : undefined;
 
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    ...(storageKey && {
+      cookieOptions: {
+        name: storageKey,
+      },
+    }),
     cookies: {
       getAll() {
-        return cookieStore.getAll();
+        const allCookies = cookieStore.getAll();
+        return context === 'any' ? allCookies : filterCookiesByContext(allCookies, context);
       },
       setAll(cookiesToSet) {
         try {
@@ -76,19 +117,31 @@ export async function createServerSupabaseClient() {
 /**
  * Maak een Supabase client voor API Routes
  * Gebruikt request/response voor cookie handling
+ *
+ * @param context - 'admin' | 'customer' | 'any' - determines which session to use
  */
 export function createApiSupabaseClient(
   request: NextRequest,
-  response: NextResponse
+  response: NextResponse,
+  context: AuthContext = 'any'
 ) {
   if (!isAuthConfigured()) {
     return null;
   }
 
+  const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY :
+                     context === 'customer' ? CUSTOMER_STORAGE_KEY : undefined;
+
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    ...(storageKey && {
+      cookieOptions: {
+        name: storageKey,
+      },
+    }),
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        const allCookies = request.cookies.getAll();
+        return context === 'any' ? allCookies : filterCookiesByContext(allCookies, context);
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
@@ -102,8 +155,10 @@ export function createApiSupabaseClient(
 
 /**
  * Maak een Supabase client voor Middleware
+ *
+ * @param context - 'admin' | 'customer' | 'any' - determines which session to use
  */
-export function createMiddlewareSupabaseClient(request: NextRequest) {
+export function createMiddlewareSupabaseClient(request: NextRequest, context: AuthContext = 'any') {
   if (!isAuthConfigured()) {
     return { supabase: null, response: NextResponse.next() };
   }
@@ -114,10 +169,19 @@ export function createMiddlewareSupabaseClient(request: NextRequest) {
     },
   });
 
+  const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY :
+                     context === 'customer' ? CUSTOMER_STORAGE_KEY : undefined;
+
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    ...(storageKey && {
+      cookieOptions: {
+        name: storageKey,
+      },
+    }),
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        const allCookies = request.cookies.getAll();
+        return context === 'any' ? allCookies : filterCookiesByContext(allCookies, context);
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
@@ -137,10 +201,13 @@ export function createMiddlewareSupabaseClient(request: NextRequest) {
 
 /**
  * Check of de huidige user geauthenticeerd is (Server Component)
+ *
+ * @param context - 'admin' | 'customer' | 'any' - which session to check
+ *                  Default is 'any' for backward compatibility
  */
-export async function getAuthUser(): Promise<AuthResult> {
+export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthResult> {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient(context);
 
     if (!supabase) {
       return {
@@ -179,13 +246,30 @@ export async function getAuthUser(): Promise<AuthResult> {
 }
 
 /**
+ * Convenience function to get admin user
+ */
+export async function getAdminAuthUser(): Promise<AuthResult> {
+  return getAuthUser('admin');
+}
+
+/**
+ * Convenience function to get customer user
+ */
+export async function getCustomerAuthUser(): Promise<AuthResult> {
+  return getAuthUser('customer');
+}
+
+/**
  * Check of een request geauthenticeerd is (Middleware/API)
+ *
+ * @param context - 'admin' | 'customer' | 'any' - which session to check
  */
 export async function checkAuthFromRequest(
-  request: NextRequest
+  request: NextRequest,
+  context: AuthContext = 'any'
 ): Promise<AuthResult> {
   try {
-    const { supabase } = createMiddlewareSupabaseClient(request);
+    const { supabase } = createMiddlewareSupabaseClient(request, context);
 
     if (!supabase) {
       return {

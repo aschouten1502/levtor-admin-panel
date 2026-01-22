@@ -12,7 +12,8 @@ import { getAuthUser } from '@/lib/shared/auth/server';
 
 export async function GET() {
   try {
-    const authResult = await getAuthUser();
+    // Use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
     if (!authResult.user?.email) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }

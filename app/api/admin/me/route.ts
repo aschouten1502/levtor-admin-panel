@@ -15,8 +15,8 @@ import { getAdminUser } from '@/lib/admin/admin-auth-service';
 
 export async function GET() {
   try {
-    // 1. Check authentication (Supabase Auth)
-    const authResult = await getAuthUser();
+    // 1. Check authentication (Supabase Auth) - use 'admin' context for session isolation
+    const authResult = await getAuthUser('admin');
 
     if (!authResult.authenticated || !authResult.user) {
       return NextResponse.json(

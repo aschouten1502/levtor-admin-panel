@@ -51,7 +51,8 @@ export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    const authResult = await getAuthUser();
+    // Use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
     if (!authResult.user?.email) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }
@@ -94,7 +95,8 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Document ID is verplicht' }, { status: 400 });
     }
 
-    const authResult = await getAuthUser();
+    // Use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
     if (!authResult.user?.email) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }

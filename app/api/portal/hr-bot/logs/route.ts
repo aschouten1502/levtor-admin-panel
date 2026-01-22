@@ -13,8 +13,8 @@ import { getAuthUser } from '@/lib/shared/auth/server';
 
 export async function GET(request: Request) {
   try {
-    // Get authenticated user
-    const authResult = await getAuthUser();
+    // Get authenticated user - use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
 
     if (!authResult.user || !authResult.user.email) {
       return NextResponse.json(

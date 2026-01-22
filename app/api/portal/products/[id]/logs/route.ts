@@ -21,7 +21,8 @@ export async function GET(request: Request, { params }: RouteParams) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const authResult = await getAuthUser();
+    // Use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
     if (!authResult.user?.email) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }

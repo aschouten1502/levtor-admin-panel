@@ -22,7 +22,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Invoice ID is verplicht' }, { status: 400 });
     }
 
-    const authResult = await getAuthUser();
+    // Use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
     if (!authResult.user?.email) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }

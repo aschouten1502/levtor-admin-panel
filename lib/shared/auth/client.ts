@@ -12,7 +12,7 @@
  */
 
 import { createBrowserClient } from '@supabase/ssr';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isAuthConfigured } from './config';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, ADMIN_STORAGE_KEY, isAuthConfigured } from './config';
 
 // ========================================
 // TYPES
@@ -44,7 +44,8 @@ export interface LogoutResult {
 let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
 /**
- * Get of maak de browser Supabase client
+ * Get of maak de browser Supabase client voor admin
+ * Uses a separate storageKey to prevent session conflicts with customer portal
  */
 export function getSupabaseBrowserClient() {
   if (!isAuthConfigured()) {
@@ -53,7 +54,11 @@ export function getSupabaseBrowserClient() {
   }
 
   if (!browserClient) {
-    browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookieOptions: {
+        name: ADMIN_STORAGE_KEY,
+      },
+    });
   }
 
   return browserClient;

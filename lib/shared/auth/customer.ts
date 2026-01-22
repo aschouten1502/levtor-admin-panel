@@ -14,7 +14,7 @@
  */
 
 import { createBrowserClient } from '@supabase/ssr';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isAuthConfigured } from './config';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, CUSTOMER_STORAGE_KEY, isAuthConfigured } from './config';
 
 // ========================================
 // TYPES
@@ -55,7 +55,11 @@ function getSupabaseBrowserClient() {
   }
 
   if (!browserClient) {
-    browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookieOptions: {
+        name: CUSTOMER_STORAGE_KEY,
+      },
+    });
   }
 
   return browserClient;

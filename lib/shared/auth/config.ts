@@ -26,11 +26,26 @@ export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // ========================================
+// SESSION STORAGE KEYS
+// ========================================
+
+/**
+ * Separate storage keys for admin and customer sessions
+ * This allows both to be logged in simultaneously in the same browser
+ */
+export const ADMIN_STORAGE_KEY = 'sb-admin-auth';
+export const CUSTOMER_STORAGE_KEY = 'sb-customer-auth';
+
+// ========================================
 // AUTH CONFIGURATION
 // ========================================
 
 export const AUTH_CONFIG = {
-  // Cookie naam voor de auth session
+  // Cookie names for sessions (now using separate keys)
+  adminCookieName: ADMIN_STORAGE_KEY,
+  customerCookieName: CUSTOMER_STORAGE_KEY,
+
+  // Legacy cookie name (deprecated)
   cookieName: 'sb-auth-token',
 
   // Session duratie (7 dagen in seconden)

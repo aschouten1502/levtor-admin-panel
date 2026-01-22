@@ -19,8 +19,8 @@ export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    // Get authenticated user
-    const authResult = await getAuthUser();
+    // Get authenticated user - use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
 
     if (!authResult.user || !authResult.user.email) {
       return NextResponse.json(

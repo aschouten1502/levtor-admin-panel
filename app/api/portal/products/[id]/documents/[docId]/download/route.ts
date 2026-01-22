@@ -16,8 +16,8 @@ export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id: productId, docId } = await params;
 
-    // Check authentication
-    const authResult = await getAuthUser();
+    // Check authentication - use 'customer' context for session isolation
+    const authResult = await getAuthUser('customer');
     if (!authResult.user?.email) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }
