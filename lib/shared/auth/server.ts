@@ -188,10 +188,13 @@ export function createMiddlewareSupabaseClient(request: NextRequest, context: Au
  *                  Default is 'any' for backward compatibility
  */
 export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthResult> {
+  console.log('🔐 [ServerAuth] getAuthUser() called with context:', context);
+
   try {
     const supabase = await createServerSupabaseClient(context);
 
     if (!supabase) {
+      console.log('❌ [ServerAuth] Supabase client not created (auth not configured)');
       return {
         authenticated: false,
         user: null,
@@ -199,15 +202,28 @@ export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthRes
       };
     }
 
+    console.log('🔐 [ServerAuth] Calling supabase.auth.getUser()...');
     const { data: { user }, error } = await supabase.auth.getUser();
 
-    if (error || !user) {
+    if (error) {
+      console.log('❌ [ServerAuth] getUser error:', error.message);
       return {
         authenticated: false,
         user: null,
-        error: error?.message,
+        error: error.message,
       };
     }
+
+    if (!user) {
+      console.log('❌ [ServerAuth] No user in session');
+      return {
+        authenticated: false,
+        user: null,
+      };
+    }
+
+    console.log('✅ [ServerAuth] User found:', user.email);
+    console.log('✅ [ServerAuth] User ID:', user.id);
 
     return {
       authenticated: true,
@@ -218,7 +234,7 @@ export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthRes
       },
     };
   } catch (err: any) {
-    console.error('❌ [Auth] Error getting user:', err.message);
+    console.error('❌ [ServerAuth] Exception:', err.message);
     return {
       authenticated: false,
       user: null,

@@ -24,12 +24,15 @@ import type { AdminUser, AdminUserInsert, AdminUserUpdate } from '@/lib/shared/s
  * Haal admin user op basis van auth_user_id (Supabase Auth ID)
  */
 export async function getAdminUser(authUserId: string): Promise<AdminUser | null> {
+  console.log('🔍 [AdminAuthService] getAdminUser() called with authUserId:', authUserId);
+
   if (!supabase) {
-    console.warn('⚠️ [AdminAuth] Supabase not configured');
+    console.warn('⚠️ [AdminAuthService] Supabase not configured');
     return null;
   }
 
   try {
+    console.log('🔍 [AdminAuthService] Querying admin_users table...');
     const { data, error } = await supabase
       .from('admin_users')
       .select('*')
@@ -37,17 +40,26 @@ export async function getAdminUser(authUserId: string): Promise<AdminUser | null
       .single();
 
     if (error) {
+      console.log('❌ [AdminAuthService] Query error:', error.message);
+      console.log('❌ [AdminAuthService] Error code:', error.code);
       if (error.code === 'PGRST116') {
-        // Not found - dit is geen admin
+        console.log('❌ [AdminAuthService] No matching record found in admin_users for auth_user_id:', authUserId);
         return null;
       }
-      console.error('❌ [AdminAuth] Error fetching admin user:', error.message);
+      console.error('❌ [AdminAuthService] Error fetching admin user:', error.message);
       return null;
     }
 
+    console.log('✅ [AdminAuthService] Admin user found:');
+    console.log('✅ [AdminAuthService] - id:', data.id);
+    console.log('✅ [AdminAuthService] - email:', data.email);
+    console.log('✅ [AdminAuthService] - auth_user_id:', data.auth_user_id);
+    console.log('✅ [AdminAuthService] - role:', data.role);
+    console.log('✅ [AdminAuthService] - is_active:', data.is_active);
+
     return data as AdminUser;
   } catch (err: any) {
-    console.error('❌ [AdminAuth] Unexpected error:', err.message);
+    console.error('❌ [AdminAuthService] Unexpected error:', err.message);
     return null;
   }
 }

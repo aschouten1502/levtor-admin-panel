@@ -62,12 +62,17 @@ export function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     // Check huidige session en admin status
     async function checkAuth() {
+      console.log('🛡️ [AuthGuard] checkAuth() started');
+      console.log('🛡️ [AuthGuard] Current pathname:', pathname);
+
       try {
         // Stap 1: Check of user ingelogd is
+        console.log('🛡️ [AuthGuard] Step 1: Calling getCurrentUser()...');
         const user = await getCurrentUser();
+        console.log('🛡️ [AuthGuard] getCurrentUser result:', user ? user.email : 'null');
 
         if (!user) {
-          // Niet ingelogd, redirect naar admin login
+          console.log('❌ [AuthGuard] No user found, redirecting to /admin/login');
           setAuthState({
             isLoading: false,
             isAuthenticated: false,
@@ -79,13 +84,24 @@ export function AuthGuard({ children }: AuthGuardProps) {
           return;
         }
 
+        console.log('🛡️ [AuthGuard] User found:', user.email);
+        console.log('🛡️ [AuthGuard] User ID:', user.id);
+
         // Stap 2: Check of user een admin is via API
+        console.log('🛡️ [AuthGuard] Step 2: Calling /api/admin/me...');
         const response = await fetch('/api/admin/me');
+        console.log('🛡️ [AuthGuard] /api/admin/me response status:', response.status);
+
         const data = await response.json();
+        console.log('🛡️ [AuthGuard] /api/admin/me response data:', JSON.stringify(data));
 
         if (!response.ok || !data.isAdmin) {
-          // Ingelogd maar geen admin - redirect naar portal
-          console.warn('⚠️ [AuthGuard] User is not an admin, redirecting to portal');
+          console.log('❌ [AuthGuard] User is NOT admin');
+          console.log('❌ [AuthGuard] response.ok:', response.ok);
+          console.log('❌ [AuthGuard] data.isAdmin:', data.isAdmin);
+          console.log('❌ [AuthGuard] data.error:', data.error);
+          console.log('❌ [AuthGuard] Redirecting to /portal/login');
+
           setAuthState({
             isLoading: false,
             isAuthenticated: true,
@@ -98,6 +114,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
         }
 
         // Stap 3: User is admin - toegang verlenen
+        console.log('✅ [AuthGuard] User IS admin:', data.admin?.email);
+        console.log('✅ [AuthGuard] Admin role:', data.admin?.role);
         setAuthState({
           isLoading: false,
           isAuthenticated: true,
@@ -106,7 +124,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
           adminInfo: data.admin,
         });
       } catch (err) {
-        console.error('❌ [AuthGuard] Error checking auth:', err);
+        console.error('❌ [AuthGuard] Exception in checkAuth:', err);
         setAuthState({
           isLoading: false,
           isAuthenticated: false,
@@ -123,8 +141,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
     // Subscribe op auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
       console.log('🔐 [AuthGuard] Auth state changed:', event);
+      console.log('🔐 [AuthGuard] Session:', session ? 'exists' : 'null');
 
       if (event === 'SIGNED_OUT' || !session) {
+        console.log('🔐 [AuthGuard] User signed out, redirecting to /admin/login');
         setAuthState({
           isLoading: false,
           isAuthenticated: false,
@@ -134,12 +154,16 @@ export function AuthGuard({ children }: AuthGuardProps) {
         });
         router.push('/admin/login');
       } else if (event === 'SIGNED_IN' && session) {
+        console.log('🔐 [AuthGuard] User signed in:', session.user?.email);
+        console.log('🔐 [AuthGuard] Re-checking admin status via /api/admin/me...');
         // Re-check admin status after sign in
         try {
           const response = await fetch('/api/admin/me');
           const data = await response.json();
+          console.log('🔐 [AuthGuard] /api/admin/me response:', response.status, JSON.stringify(data));
 
           if (!response.ok || !data.isAdmin) {
+            console.log('⚠️ [AuthGuard] Signed in but NOT admin, redirecting to /portal/login');
             // Signed in but not admin
             setAuthState({
               isLoading: false,
@@ -150,6 +174,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
             });
             router.push('/portal/login');
           } else {
+            console.log('✅ [AuthGuard] Signed in as admin:', data.admin?.email);
             setAuthState({
               isLoading: false,
               isAuthenticated: true,
@@ -158,7 +183,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
               adminInfo: data.admin,
             });
           }
-        } catch {
+        } catch (err) {
+          console.error('❌ [AuthGuard] Exception during auth state change:', err);
           router.push('/admin/login');
         }
       }

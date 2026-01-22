@@ -72,9 +72,13 @@ export function getSupabaseBrowserClient() {
  * Login met email en password
  */
 export async function login(credentials: LoginCredentials): Promise<LoginResult> {
+  console.log('🔐 [AuthClient] login() called for:', credentials.email);
+
   const supabase = getSupabaseBrowserClient();
+  console.log('🔐 [AuthClient] Browser client created with storageKey:', ADMIN_STORAGE_KEY);
 
   if (!supabase) {
+    console.log('❌ [AuthClient] Supabase client is null (auth not configured)');
     return {
       success: false,
       error: 'Auth is niet geconfigureerd. Check de environment variables.',
@@ -82,12 +86,14 @@ export async function login(credentials: LoginCredentials): Promise<LoginResult>
   }
 
   try {
+    console.log('🔐 [AuthClient] Calling signInWithPassword...');
     const { data, error } = await supabase.auth.signInWithPassword({
       email: credentials.email,
       password: credentials.password,
     });
 
     if (error) {
+      console.error('❌ [AuthClient] signInWithPassword error:', error.message);
       // Vertaal bekende errors naar Nederlandse berichten
       let errorMessage = error.message;
 
@@ -106,19 +112,23 @@ export async function login(credentials: LoginCredentials): Promise<LoginResult>
     }
 
     if (!data.user) {
+      console.log('❌ [AuthClient] No user in response data');
       return {
         success: false,
         error: 'Login mislukt. Probeer opnieuw.',
       };
     }
 
-    console.log('✅ [Auth] Login successful for:', data.user.email);
+    console.log('✅ [AuthClient] signInWithPassword success');
+    console.log('✅ [AuthClient] User ID:', data.user.id);
+    console.log('✅ [AuthClient] User email:', data.user.email);
+    console.log('✅ [AuthClient] Session stored in cookies with prefix:', ADMIN_STORAGE_KEY);
 
     return {
       success: true,
     };
   } catch (err: any) {
-    console.error('❌ [Auth] Login error:', err);
+    console.error('❌ [AuthClient] Exception during login:', err);
     return {
       success: false,
       error: 'Er is een onverwachte fout opgetreden.',
@@ -168,16 +178,32 @@ export async function logout(): Promise<LogoutResult> {
  * Get de huidige user (client-side)
  */
 export async function getCurrentUser() {
+  console.log('🔍 [AuthClient] getCurrentUser() called');
+  console.log('🔍 [AuthClient] Using storageKey:', ADMIN_STORAGE_KEY);
+
   const supabase = getSupabaseBrowserClient();
 
   if (!supabase) {
+    console.log('❌ [AuthClient] Supabase client is null');
     return null;
   }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log('🔍 [AuthClient] Calling supabase.auth.getUser()...');
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    if (error) {
+      console.log('❌ [AuthClient] getUser error:', error.message);
+      return null;
+    }
+
+    console.log('🔍 [AuthClient] getUser result:', user ? user.email : 'null');
+    if (user) {
+      console.log('🔍 [AuthClient] User ID:', user.id);
+    }
     return user;
-  } catch {
+  } catch (err) {
+    console.error('❌ [AuthClient] Exception in getCurrentUser:', err);
     return null;
   }
 }

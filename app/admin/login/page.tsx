@@ -28,15 +28,18 @@ export default function AdminLoginPage() {
   useEffect(() => {
     // Check of user al ingelogd is
     async function checkExistingSession() {
+      console.log('🔍 [AdminLogin] Checking existing session...');
       try {
         const user = await getCurrentUser();
+        console.log('🔍 [AdminLogin] getCurrentUser result:', user ? user.email : 'null');
         if (user) {
-          // Al ingelogd, redirect naar admin
+          console.log('✅ [AdminLogin] User found, redirecting to /admin');
           router.push('/admin');
           return;
         }
+        console.log('ℹ️ [AdminLogin] No existing session, showing login form');
       } catch (err) {
-        // Geen session, toon login form
+        console.error('❌ [AdminLogin] Error checking session:', err);
       }
       setIsCheckingSession(false);
     }
@@ -50,17 +53,22 @@ export default function AdminLoginPage() {
     setError(null);
     setIsLoading(true);
 
+    console.log('🔑 [AdminLogin] Login attempt for:', email);
+
     try {
       const result = await login({ email, password });
+      console.log('🔑 [AdminLogin] Login result:', result);
 
       if (result.success) {
-        // Succesvolle login, redirect naar admin
+        console.log('✅ [AdminLogin] Login successful, redirecting to /admin');
         router.push('/admin');
         router.refresh(); // Force refresh om nieuwe session te laden
       } else {
+        console.log('❌ [AdminLogin] Login failed:', result.error);
         setError(result.error || 'Login mislukt');
       }
     } catch (err: any) {
+      console.error('❌ [AdminLogin] Exception during login:', err);
       setError(err.message || 'Er is een fout opgetreden');
     } finally {
       setIsLoading(false);
