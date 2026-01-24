@@ -218,14 +218,48 @@ export async function middleware(request: NextRequest) {
     try {
       // Gebruik de juiste storage key op basis van de route
       const storageKey = getStorageKeyForRoute(pathname);
-      console.log(`🔐 [Middleware] Auth check for ${pathname} with storageKey: ${storageKey || 'default'}`);
+      const isPortalRoute = pathname.startsWith('/api/portal');
+      const authStartTime = Date.now();
+
+      // Extra logging voor portal routes om refresh probleem te debuggen
+      if (isPortalRoute) {
+        console.log(`🔐 [Middleware] ========== PORTAL AUTH DEBUG ==========`);
+        console.log(`🔐 [Middleware] Timestamp: ${new Date().toISOString()}`);
+        console.log(`🔐 [Middleware] Path: ${pathname}`);
+        console.log(`🔐 [Middleware] Storage key: ${storageKey}`);
+
+        // Log alle cookies die we hebben
+        const allCookies = request.cookies.getAll();
+        const authCookies = allCookies.filter(c => c.name.includes('sb-') || c.name.includes('auth'));
+        console.log(`🔐 [Middleware] Total cookies: ${allCookies.length}`);
+        console.log(`🔐 [Middleware] Auth-related cookies: ${authCookies.map(c => c.name).join(', ') || 'NONE'}`);
+
+        // Check specifiek voor customer auth cookie
+        const customerCookie = allCookies.find(c => c.name.includes(CUSTOMER_STORAGE_KEY));
+        console.log(`🔐 [Middleware] Customer cookie (${CUSTOMER_STORAGE_KEY}): ${customerCookie ? 'PRESENT' : 'MISSING'}`);
+      } else {
+        console.log(`🔐 [Middleware] Auth check for ${pathname} with storageKey: ${storageKey || 'default'}`);
+      }
 
       const supabase = createMiddlewareClient(request, response, storageKey);
       // getUser() refresht automatisch de session als nodig
       const { data: { user }, error } = await supabase.auth.getUser();
+      const authDuration = Date.now() - authStartTime;
       isUserAuthenticated = !error && !!user;
 
-      if (isProtectedApiRoute(pathname)) {
+      if (isPortalRoute) {
+        console.log(`🔐 [Middleware] getUser() completed in ${authDuration}ms`);
+        console.log(`🔐 [Middleware] User authenticated: ${isUserAuthenticated}`);
+        if (user) {
+          console.log(`🔐 [Middleware] User email: ${user.email}`);
+          console.log(`🔐 [Middleware] User ID: ${user.id}`);
+        }
+        if (error) {
+          console.log(`🔐 [Middleware] Auth error: ${error.message}`);
+          console.log(`🔐 [Middleware] Error status: ${error.status || 'unknown'}`);
+        }
+        console.log(`🔐 [Middleware] ========== END PORTAL AUTH DEBUG ==========`);
+      } else if (isProtectedApiRoute(pathname)) {
         console.log(`🔐 [Middleware] User authenticated: ${isUserAuthenticated}`);
         if (user) {
           console.log(`🔐 [Middleware] User: ${user.email}`);
@@ -236,6 +270,7 @@ export async function middleware(request: NextRequest) {
     } catch (err: any) {
       // Ignore errors - session refresh is niet kritiek
       console.log(`🔐 [Middleware] Exception during auth check: ${err.message}`);
+      console.log(`🔐 [Middleware] Exception stack:`, err.stack);
       isUserAuthenticated = false;
     }
   } else {

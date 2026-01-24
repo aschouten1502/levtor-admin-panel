@@ -50,30 +50,51 @@ export function PortalAuthGuard({ children }: PortalAuthGuardProps) {
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    const effectStartTime = Date.now();
+    console.log(`🔄 [PortalAuthGuard] useEffect triggered - mounted: ${mounted}, timestamp: ${new Date().toISOString()}`);
+
+    if (!mounted) {
+      console.log('⏳ [PortalAuthGuard] Skipping auth check - not yet mounted');
+      return;
+    }
 
     let isCancelled = false;
 
     async function checkAuth() {
-      console.log('🔍 [PortalAuthGuard] Starting auth check...');
+      const authStartTime = Date.now();
+      console.log(`🔍 [PortalAuthGuard] Starting auth check at ${new Date().toISOString()}`);
+      console.log(`🔍 [PortalAuthGuard] Window location: ${typeof window !== 'undefined' ? window.location.href : 'SSR'}`);
+
       try {
         const currentCustomer = await getCurrentCustomer();
-        console.log('🔍 [PortalAuthGuard] getCurrentCustomer result:', currentCustomer);
+        const authDuration = Date.now() - authStartTime;
+        console.log(`🔍 [PortalAuthGuard] getCurrentCustomer completed in ${authDuration}ms`);
+        console.log(`🔍 [PortalAuthGuard] Result:`, currentCustomer ? `Customer found: ${currentCustomer.email}` : 'null (not authenticated)');
 
-        if (isCancelled) return;
+        if (isCancelled) {
+          console.log('⚠️ [PortalAuthGuard] Auth check cancelled (component unmounted)');
+          return;
+        }
 
         if (!currentCustomer) {
-          console.log('🔒 [PortalAuthGuard] Not authenticated - redirecting to login');
+          console.log(`🔒 [PortalAuthGuard] Not authenticated after ${authDuration}ms - redirecting to login`);
+          console.log(`🔒 [PortalAuthGuard] Redirect reason: getCurrentCustomer returned null`);
           setIsLoading(false);
           router.push('/portal/login');
           return;
         }
 
+        console.log(`✅ [PortalAuthGuard] Auth successful - setting customer: ${currentCustomer.email}, tenant: ${currentCustomer.tenant_id}`);
         setCustomer(currentCustomer);
         setIsLoading(false);
       } catch (error) {
-        console.error('❌ [PortalAuthGuard] Auth check error:', error);
+        const authDuration = Date.now() - authStartTime;
+        console.error(`❌ [PortalAuthGuard] Auth check error after ${authDuration}ms:`, error);
+        console.error(`❌ [PortalAuthGuard] Error type:`, error instanceof Error ? error.constructor.name : typeof error);
+        console.error(`❌ [PortalAuthGuard] Error message:`, error instanceof Error ? error.message : String(error));
+
         if (!isCancelled) {
+          console.log('🔒 [PortalAuthGuard] Redirecting to login due to error');
           setIsLoading(false);
           router.push('/portal/login');
         }
@@ -83,18 +104,28 @@ export function PortalAuthGuard({ children }: PortalAuthGuardProps) {
     checkAuth();
 
     // Subscribe to auth changes
+    console.log('📡 [PortalAuthGuard] Setting up auth state subscription');
     const subscription = onCustomerAuthStateChange((newCustomer) => {
-      if (isCancelled) return;
+      console.log(`📡 [PortalAuthGuard] Auth state changed - newCustomer: ${newCustomer ? newCustomer.email : 'null'}`);
+
+      if (isCancelled) {
+        console.log('⚠️ [PortalAuthGuard] Subscription callback cancelled');
+        return;
+      }
 
       if (!newCustomer) {
+        console.log('📡 [PortalAuthGuard] Auth state: logged out - redirecting to login');
         router.push('/portal/login');
         return;
       }
 
+      console.log(`📡 [PortalAuthGuard] Auth state: updating customer to ${newCustomer.email}`);
       setCustomer(newCustomer);
     });
 
     return () => {
+      const effectDuration = Date.now() - effectStartTime;
+      console.log(`🧹 [PortalAuthGuard] Cleanup - effect ran for ${effectDuration}ms, setting isCancelled=true`);
       isCancelled = true;
       subscription.unsubscribe();
     };

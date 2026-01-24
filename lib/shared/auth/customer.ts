@@ -212,42 +212,74 @@ export async function customerLogout(): Promise<{ success: boolean; error?: stri
  * Gebruikt /api/portal/me voor server-side check met service key
  */
 export async function getCurrentCustomer(): Promise<CustomerUser | null> {
-  console.log('🔍 [CustomerAuth] getCurrentCustomer called');
+  const startTime = Date.now();
+  console.log(`🔍 [CustomerAuth] getCurrentCustomer called at ${new Date().toISOString()}`);
+
   const supabase = getSupabaseBrowserClient();
 
   if (!supabase) {
-    console.log('🔍 [CustomerAuth] No supabase client');
+    console.log('❌ [CustomerAuth] No supabase client - auth not configured');
     return null;
   }
 
   try {
     // Check of er een geauthenticeerde user is
     // Note: getUser() verifieert met de server, beter dan getSession() na page refresh
-    console.log('🔍 [CustomerAuth] Checking user...');
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    console.log('🔍 [CustomerAuth] User result:', user ? 'exists' : 'null', userError?.message || '');
+    const getUserStartTime = Date.now();
+    console.log('🔍 [CustomerAuth] Step 1: Calling supabase.auth.getUser()...');
 
-    if (!user || userError) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const getUserDuration = Date.now() - getUserStartTime;
+
+    console.log(`🔍 [CustomerAuth] getUser() completed in ${getUserDuration}ms`);
+    console.log(`🔍 [CustomerAuth] getUser() result: user=${user ? user.email : 'null'}, error=${userError?.message || 'none'}`);
+
+    if (userError) {
+      console.log(`❌ [CustomerAuth] getUser() error: ${userError.message}`);
+      console.log(`❌ [CustomerAuth] Error code: ${userError.status || 'unknown'}`);
+      console.log(`❌ [CustomerAuth] This usually means: session expired, cookies missing, or network issue`);
+      return null;
+    }
+
+    if (!user) {
+      console.log('❌ [CustomerAuth] No user found in session (user is null)');
+      console.log('❌ [CustomerAuth] Possible causes: not logged in, cookies cleared, session expired');
       return null;
     }
 
     // Gebruik API route voor server-side customer check
-    console.log('🔍 [CustomerAuth] Fetching /api/portal/me...');
+    const apiStartTime = Date.now();
+    console.log(`🔍 [CustomerAuth] Step 2: Fetching /api/portal/me for user ${user.email}...`);
+
     const response = await fetch('/api/portal/me', {
       credentials: 'include',
     });
-    console.log('🔍 [CustomerAuth] API response status:', response.status);
+    const apiDuration = Date.now() - apiStartTime;
+
+    console.log(`🔍 [CustomerAuth] /api/portal/me completed in ${apiDuration}ms`);
+    console.log(`🔍 [CustomerAuth] API response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
+      console.log(`❌ [CustomerAuth] API returned error status: ${response.status}`);
+      if (response.status === 401) {
+        console.log('❌ [CustomerAuth] 401 Unauthorized - server could not verify session');
+      } else if (response.status === 403) {
+        console.log('❌ [CustomerAuth] 403 Forbidden - user not in customer_users or deactivated');
+      }
       return null;
     }
 
     const data = await response.json();
-    console.log('🔍 [CustomerAuth] API data:', data);
+    console.log('🔍 [CustomerAuth] API response data:', JSON.stringify(data, null, 2));
 
     if (!data.customer) {
+      console.log('❌ [CustomerAuth] API response has no customer object');
       return null;
     }
+
+    const totalDuration = Date.now() - startTime;
+    console.log(`✅ [CustomerAuth] getCurrentCustomer SUCCESS in ${totalDuration}ms (getUser: ${getUserDuration}ms, API: ${apiDuration}ms)`);
+    console.log(`✅ [CustomerAuth] Customer: ${data.customer.email}, Tenant: ${data.customer.tenant_id}`);
 
     return {
       id: data.customer.id,
@@ -257,7 +289,11 @@ export async function getCurrentCustomer(): Promise<CustomerUser | null> {
       role: data.customer.role,
       is_active: data.customer.is_active,
     };
-  } catch {
+  } catch (error) {
+    const totalDuration = Date.now() - startTime;
+    console.error(`❌ [CustomerAuth] getCurrentCustomer EXCEPTION after ${totalDuration}ms:`, error);
+    console.error(`❌ [CustomerAuth] Exception type:`, error instanceof Error ? error.constructor.name : typeof error);
+    console.error(`❌ [CustomerAuth] Exception message:`, error instanceof Error ? error.message : String(error));
     return null;
   }
 }

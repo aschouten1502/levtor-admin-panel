@@ -188,9 +188,26 @@ export function createMiddlewareSupabaseClient(request: NextRequest, context: Au
  *                  Default is 'any' for backward compatibility
  */
 export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthResult> {
-  console.log('🔐 [ServerAuth] getAuthUser() called with context:', context);
+  const startTime = Date.now();
+  const storageKey = context === 'admin' ? ADMIN_STORAGE_KEY :
+                     context === 'customer' ? CUSTOMER_STORAGE_KEY : 'any';
+  console.log(`🔐 [ServerAuth] getAuthUser() called - context: ${context}, storageKey: ${storageKey}`);
 
   try {
+    // Log cookies voor debug
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    const authCookies = allCookies.filter(c => c.name.includes('sb-') || c.name.includes('auth'));
+    console.log(`🔐 [ServerAuth] Available cookies: ${allCookies.length} total, ${authCookies.length} auth-related`);
+    console.log(`🔐 [ServerAuth] Auth cookie names: ${authCookies.map(c => c.name).join(', ') || 'NONE'}`);
+
+    // Check specifiek voor de verwachte storage key
+    if (context !== 'any') {
+      const expectedCookiePrefix = context === 'admin' ? ADMIN_STORAGE_KEY : CUSTOMER_STORAGE_KEY;
+      const hasCookie = allCookies.some(c => c.name.includes(expectedCookiePrefix));
+      console.log(`🔐 [ServerAuth] Expected cookie (${expectedCookiePrefix}): ${hasCookie ? 'FOUND' : 'NOT FOUND'}`);
+    }
+
     const supabase = await createServerSupabaseClient(context);
 
     if (!supabase) {
@@ -202,11 +219,16 @@ export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthRes
       };
     }
 
+    const getUserStartTime = Date.now();
     console.log('🔐 [ServerAuth] Calling supabase.auth.getUser()...');
     const { data: { user }, error } = await supabase.auth.getUser();
+    const getUserDuration = Date.now() - getUserStartTime;
+
+    console.log(`🔐 [ServerAuth] getUser() completed in ${getUserDuration}ms`);
 
     if (error) {
-      console.log('❌ [ServerAuth] getUser error:', error.message);
+      console.log(`❌ [ServerAuth] getUser error: ${error.message}`);
+      console.log(`❌ [ServerAuth] Error status: ${error.status || 'unknown'}`);
       return {
         authenticated: false,
         user: null,
@@ -215,15 +237,18 @@ export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthRes
     }
 
     if (!user) {
-      console.log('❌ [ServerAuth] No user in session');
+      const totalDuration = Date.now() - startTime;
+      console.log(`❌ [ServerAuth] No user in session after ${totalDuration}ms`);
+      console.log('❌ [ServerAuth] This means: valid cookies but no active session, or session expired');
       return {
         authenticated: false,
         user: null,
       };
     }
 
-    console.log('✅ [ServerAuth] User found:', user.email);
-    console.log('✅ [ServerAuth] User ID:', user.id);
+    const totalDuration = Date.now() - startTime;
+    console.log(`✅ [ServerAuth] User found in ${totalDuration}ms: ${user.email}`);
+    console.log(`✅ [ServerAuth] User ID: ${user.id}`);
 
     return {
       authenticated: true,
@@ -234,7 +259,8 @@ export async function getAuthUser(context: AuthContext = 'any'): Promise<AuthRes
       },
     };
   } catch (err: any) {
-    console.error('❌ [ServerAuth] Exception:', err.message);
+    const totalDuration = Date.now() - startTime;
+    console.error(`❌ [ServerAuth] Exception after ${totalDuration}ms:`, err.message);
     return {
       authenticated: false,
       user: null,
