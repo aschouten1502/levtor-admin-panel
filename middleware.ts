@@ -33,6 +33,10 @@ import { createServerClient } from '@supabase/ssr';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+// Storage keys voor sessie isolatie (moet overeenkomen met client.ts en server.ts)
+const ADMIN_STORAGE_KEY = 'sb-admin-auth';
+const CUSTOMER_STORAGE_KEY = 'sb-customer-auth';
+
 // Routes die auth bescherming nodig hebben
 const PROTECTED_API_ROUTES = ['/api/admin', '/api/portal'];
 
@@ -99,10 +103,28 @@ function isProtectedApiRoute(pathname: string): boolean {
 }
 
 /**
- * Maak Supabase client voor middleware
+ * Bepaal welke storage key te gebruiken op basis van de route
  */
-function createMiddlewareClient(request: NextRequest, response: NextResponse) {
+function getStorageKeyForRoute(pathname: string): string | undefined {
+  if (pathname.startsWith('/api/admin')) {
+    return ADMIN_STORAGE_KEY;
+  }
+  if (pathname.startsWith('/api/portal')) {
+    return CUSTOMER_STORAGE_KEY;
+  }
+  return undefined; // Geen specifieke context - probeer alle sessies
+}
+
+/**
+ * Maak Supabase client voor middleware met optionele storage key
+ */
+function createMiddlewareClient(request: NextRequest, response: NextResponse, storageKey?: string) {
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    ...(storageKey && {
+      cookieOptions: {
+        name: storageKey,
+      },
+    }),
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -194,12 +216,26 @@ export async function middleware(request: NextRequest) {
 
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     try {
-      const supabase = createMiddlewareClient(request, response);
+      // Gebruik de juiste storage key op basis van de route
+      const storageKey = getStorageKeyForRoute(pathname);
+      console.log(`🔐 [Middleware] Auth check for ${pathname} with storageKey: ${storageKey || 'default'}`);
+
+      const supabase = createMiddlewareClient(request, response, storageKey);
       // getUser() refresht automatisch de session als nodig
       const { data: { user }, error } = await supabase.auth.getUser();
       isUserAuthenticated = !error && !!user;
-    } catch {
+
+      if (isProtectedApiRoute(pathname)) {
+        console.log(`🔐 [Middleware] User authenticated: ${isUserAuthenticated}`);
+        if (user) {
+          console.log(`🔐 [Middleware] User: ${user.email}`);
+        } else if (error) {
+          console.log(`🔐 [Middleware] Auth error: ${error.message}`);
+        }
+      }
+    } catch (err: any) {
       // Ignore errors - session refresh is niet kritiek
+      console.log(`🔐 [Middleware] Exception during auth check: ${err.message}`);
       isUserAuthenticated = false;
     }
   } else {
