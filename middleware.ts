@@ -305,6 +305,6 @@ export const config = {
     // Match all API routes
     '/api/:path*',
     // Match all pages except static files and Next.js internals
-    '/((?!_next/static|_next/image|favicon.ico|icons|images|manifest.json|sw.js|workbox-*).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icons|images|manifest\\.json|manifest\\.webmanifest|sw\\.js|workbox-*).*)',
   ],
 };
