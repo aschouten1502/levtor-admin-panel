@@ -51,15 +51,19 @@ let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
 function getSupabaseBrowserClient() {
   if (!isAuthConfigured()) {
+    console.log('🔧 [CustomerAuth] getSupabaseBrowserClient: Auth not configured');
     return null;
   }
 
   if (!browserClient) {
+    console.log(`🔧 [CustomerAuth] getSupabaseBrowserClient: Creating NEW client with storage key "${CUSTOMER_STORAGE_KEY}"`);
     browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       cookieOptions: {
         name: CUSTOMER_STORAGE_KEY,
       },
     });
+  } else {
+    console.log(`🔧 [CustomerAuth] getSupabaseBrowserClient: REUSING existing client (storage key: "${CUSTOMER_STORAGE_KEY}")`);
   }
 
   return browserClient;
@@ -223,12 +227,72 @@ export async function getCurrentCustomer(): Promise<CustomerUser | null> {
   }
 
   try {
+    // === DEBUG: Log browser cookies ===
+    if (typeof document !== 'undefined') {
+      const allCookies = document.cookie;
+      const authCookies = allCookies
+        .split(';')
+        .map(c => c.trim())
+        .filter(c => c.startsWith('sb-') || c.includes('supabase') || c.includes(CUSTOMER_STORAGE_KEY));
+      console.log(`🍪 [CustomerAuth] All cookies present: ${allCookies.length > 0 ? 'yes' : 'NO COOKIES'}`);
+      console.log(`🍪 [CustomerAuth] Auth-related cookies found: ${authCookies.length}`);
+      authCookies.forEach((c, i) => {
+        // Log cookie name and first 20 chars of value for debugging
+        const [name, value] = c.split('=');
+        console.log(`🍪 [CustomerAuth]   Cookie ${i + 1}: ${name}=${value ? value.substring(0, 20) + '...' : 'empty'}`);
+      });
+    }
+
+    // === DEBUG: Log localStorage auth items ===
+    if (typeof localStorage !== 'undefined') {
+      const storageKeys = Object.keys(localStorage).filter(k =>
+        k.startsWith('sb-') || k.includes('supabase') || k.includes(CUSTOMER_STORAGE_KEY)
+      );
+      console.log(`💾 [CustomerAuth] Auth-related localStorage keys: ${storageKeys.length}`);
+      storageKeys.forEach((k, i) => {
+        const value = localStorage.getItem(k);
+        console.log(`💾 [CustomerAuth]   Key ${i + 1}: ${k} (${value ? value.length : 0} chars)`);
+      });
+    }
+
+    // === DEBUG: First try getSession() for comparison ===
+    console.log('🔍 [CustomerAuth] Step 0: Calling supabase.auth.getSession() for diagnostics...');
+    const getSessionStartTime = Date.now();
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const getSessionDuration = Date.now() - getSessionStartTime;
+    console.log(`🔍 [CustomerAuth] getSession() completed in ${getSessionDuration}ms`);
+    console.log(`🔍 [CustomerAuth] getSession() result: session=${sessionData?.session ? 'EXISTS' : 'null'}, user=${sessionData?.session?.user?.email || 'null'}, error=${sessionError?.message || 'none'}`);
+    if (sessionData?.session) {
+      console.log(`🔍 [CustomerAuth] Session expires_at: ${sessionData.session.expires_at ? new Date(sessionData.session.expires_at * 1000).toISOString() : 'unknown'}`);
+      console.log(`🔍 [CustomerAuth] Session access_token: ${sessionData.session.access_token ? sessionData.session.access_token.substring(0, 20) + '...' : 'none'}`);
+    }
+
     // Check of er een geauthenticeerde user is
     // Note: getUser() verifieert met de server, beter dan getSession() na page refresh
     const getUserStartTime = Date.now();
-    console.log('🔍 [CustomerAuth] Step 1: Calling supabase.auth.getUser()...');
+    console.log('🔍 [CustomerAuth] Step 1: Calling supabase.auth.getUser() with 10s timeout...');
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // === Timeout wrapper for getUser() ===
+    const GETUSER_TIMEOUT_MS = 10000;
+    const getUserPromise = supabase.auth.getUser();
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`getUser() TIMEOUT after ${GETUSER_TIMEOUT_MS}ms`)), GETUSER_TIMEOUT_MS);
+    });
+
+    let user: { id: string; email?: string } | null = null;
+    let userError: { message: string; status?: number } | null = null;
+
+    try {
+      const result = await Promise.race([getUserPromise, timeoutPromise]);
+      user = result.data.user;
+      userError = result.error;
+    } catch (timeoutErr) {
+      console.error(`⏱️ [CustomerAuth] getUser() TIMEOUT! Call did not return within ${GETUSER_TIMEOUT_MS}ms`);
+      console.error(`⏱️ [CustomerAuth] This indicates the Supabase client is hanging, possibly due to missing/invalid cookies or network issues`);
+      console.error(`⏱️ [CustomerAuth] Session from getSession() was: ${sessionData?.session ? 'present' : 'null'}`);
+      throw timeoutErr;
+    }
+
     const getUserDuration = Date.now() - getUserStartTime;
 
     console.log(`🔍 [CustomerAuth] getUser() completed in ${getUserDuration}ms`);
