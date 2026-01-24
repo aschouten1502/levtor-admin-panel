@@ -60,12 +60,11 @@ export default function CostsPage() {
     fetchDetails();
   }, [selectedTenant]);
 
-  // Format currency (null-safe)
+  // Format currency (null-safe) - 3 decimalen voor betere leesbaarheid in UI
   const formatCost = (cost: number | undefined | null) => {
     if (cost === undefined || cost === null) return '$0.00';
     if (cost === 0) return '$0.00';
-    if (cost < 0.01) return `$${cost.toFixed(6)}`;
-    return `$${cost.toFixed(4)}`;
+    return `$${cost.toFixed(3)}`;
   };
 
   // Calculate totals
