@@ -213,137 +213,58 @@ export async function customerLogout(): Promise<{ success: boolean; error?: stri
 
 /**
  * Haal huidige customer op (client-side)
- * Gebruikt /api/portal/me voor server-side check met service key
+ *
+ * SIMPLIFIED APPROACH (v2.3.1):
+ * Skip de Supabase browser client volledig - deze hangt op page refresh.
+ * Roep direct /api/portal/me aan - de server-side auth werkt wel omdat
+ * cookies automatisch worden meegestuurd.
  */
 export async function getCurrentCustomer(): Promise<CustomerUser | null> {
   const startTime = Date.now();
   console.log(`🔍 [CustomerAuth] getCurrentCustomer called at ${new Date().toISOString()}`);
 
-  const supabase = getSupabaseBrowserClient();
+  // Check of we in browser zijn
+  if (typeof window === 'undefined') {
+    console.log('❌ [CustomerAuth] Not in browser environment');
+    return null;
+  }
 
-  if (!supabase) {
-    console.log('❌ [CustomerAuth] No supabase client - auth not configured');
+  // Quick check: is er een customer auth cookie?
+  const hasCustomerCookie = document.cookie.includes(CUSTOMER_STORAGE_KEY);
+  console.log(`🍪 [CustomerAuth] Has ${CUSTOMER_STORAGE_KEY} cookie: ${hasCustomerCookie ? 'YES' : 'NO'}`);
+
+  if (!hasCustomerCookie) {
+    console.log('❌ [CustomerAuth] No customer auth cookie - user not logged in');
     return null;
   }
 
   try {
-    // === DEBUG: Log browser cookies ===
-    if (typeof document !== 'undefined') {
-      const allCookies = document.cookie;
-      const authCookies = allCookies
-        .split(';')
-        .map(c => c.trim())
-        .filter(c => c.startsWith('sb-') || c.includes('supabase') || c.includes(CUSTOMER_STORAGE_KEY));
-      console.log(`🍪 [CustomerAuth] All cookies present: ${allCookies.length > 0 ? 'yes' : 'NO COOKIES'}`);
-      console.log(`🍪 [CustomerAuth] Auth-related cookies found: ${authCookies.length}`);
-      authCookies.forEach((c, i) => {
-        // Log cookie name and first 20 chars of value for debugging
-        const [name, value] = c.split('=');
-        console.log(`🍪 [CustomerAuth]   Cookie ${i + 1}: ${name}=${value ? value.substring(0, 20) + '...' : 'empty'}`);
-      });
-    }
-
-    // === DEBUG: Log localStorage auth items ===
-    if (typeof localStorage !== 'undefined') {
-      const storageKeys = Object.keys(localStorage).filter(k =>
-        k.startsWith('sb-') || k.includes('supabase') || k.includes(CUSTOMER_STORAGE_KEY)
-      );
-      console.log(`💾 [CustomerAuth] Auth-related localStorage keys: ${storageKeys.length}`);
-      storageKeys.forEach((k, i) => {
-        const value = localStorage.getItem(k);
-        console.log(`💾 [CustomerAuth]   Key ${i + 1}: ${k} (${value ? value.length : 0} chars)`);
-      });
-    }
-
-    // === Timeout constant for all Supabase calls ===
-    const AUTH_TIMEOUT_MS = 5000;
-
-    // === Get session with timeout (skip if it hangs) ===
-    console.log('🔍 [CustomerAuth] Step 0: Calling supabase.auth.getSession() with timeout...');
-    const getSessionStartTime = Date.now();
-    let sessionData: { session: { user?: { email?: string }; expires_at?: number; access_token?: string } | null } | null = null;
-
-    try {
-      const sessionPromise = supabase.auth.getSession();
-      const sessionTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('getSession timeout')), AUTH_TIMEOUT_MS);
-      });
-      const sessionResult = await Promise.race([sessionPromise, sessionTimeoutPromise]);
-      sessionData = sessionResult.data;
-      const getSessionDuration = Date.now() - getSessionStartTime;
-      console.log(`🔍 [CustomerAuth] getSession() completed in ${getSessionDuration}ms`);
-      console.log(`🔍 [CustomerAuth] getSession() result: session=${sessionData?.session ? 'EXISTS' : 'null'}, user=${sessionData?.session?.user?.email || 'null'}`);
-    } catch (sessionErr) {
-      console.warn(`⚠️ [CustomerAuth] getSession() timed out after ${AUTH_TIMEOUT_MS}ms - continuing with getUser()`);
-    }
-
-    // Check of er een geauthenticeerde user is
-    // Note: getUser() verifieert met de server, beter dan getSession() na page refresh
-    const getUserStartTime = Date.now();
-    console.log('🔍 [CustomerAuth] Step 1: Calling supabase.auth.getUser() with timeout...');
-
-    // === Timeout wrapper for getUser() ===
-    const getUserPromise = supabase.auth.getUser();
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`getUser() TIMEOUT after ${AUTH_TIMEOUT_MS}ms`)), AUTH_TIMEOUT_MS);
-    });
-
-    let user: { id: string; email?: string } | null = null;
-    let userError: { message: string; status?: number } | null = null;
-
-    try {
-      const result = await Promise.race([getUserPromise, timeoutPromise]);
-      user = result.data.user;
-      userError = result.error;
-    } catch (timeoutErr) {
-      console.error(`⏱️ [CustomerAuth] getUser() TIMEOUT after ${AUTH_TIMEOUT_MS}ms`);
-      console.error(`⏱️ [CustomerAuth] This indicates the Supabase client is hanging`);
-      // Don't throw - return null to trigger redirect to login
-      return null;
-    }
-
-    const getUserDuration = Date.now() - getUserStartTime;
-
-    console.log(`🔍 [CustomerAuth] getUser() completed in ${getUserDuration}ms`);
-    console.log(`🔍 [CustomerAuth] getUser() result: user=${user ? user.email : 'null'}, error=${userError?.message || 'none'}`);
-
-    if (userError) {
-      console.log(`❌ [CustomerAuth] getUser() error: ${userError.message}`);
-      console.log(`❌ [CustomerAuth] Error code: ${userError.status || 'unknown'}`);
-      console.log(`❌ [CustomerAuth] This usually means: session expired, cookies missing, or network issue`);
-      return null;
-    }
-
-    if (!user) {
-      console.log('❌ [CustomerAuth] No user found in session (user is null)');
-      console.log('❌ [CustomerAuth] Possible causes: not logged in, cookies cleared, session expired');
-      return null;
-    }
-
-    // Gebruik API route voor server-side customer check
-    const apiStartTime = Date.now();
-    console.log(`🔍 [CustomerAuth] Step 2: Fetching /api/portal/me for user ${user.email}...`);
+    // Direct API call - skip Supabase browser client entirely
+    // Server-side auth works because cookies are sent with the request
+    console.log('🔍 [CustomerAuth] Fetching /api/portal/me (server handles auth)...');
 
     const response = await fetch('/api/portal/me', {
       credentials: 'include',
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
     });
-    const apiDuration = Date.now() - apiStartTime;
 
-    console.log(`🔍 [CustomerAuth] /api/portal/me completed in ${apiDuration}ms`);
-    console.log(`🔍 [CustomerAuth] API response status: ${response.status} ${response.statusText}`);
+    const apiDuration = Date.now() - startTime;
+    console.log(`🔍 [CustomerAuth] API response in ${apiDuration}ms: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
-      console.log(`❌ [CustomerAuth] API returned error status: ${response.status}`);
       if (response.status === 401) {
-        console.log('❌ [CustomerAuth] 401 Unauthorized - server could not verify session');
+        console.log('❌ [CustomerAuth] 401 - Session invalid or expired');
       } else if (response.status === 403) {
-        console.log('❌ [CustomerAuth] 403 Forbidden - user not in customer_users or deactivated');
+        console.log('❌ [CustomerAuth] 403 - User not in customer_users or deactivated');
+      } else {
+        console.log(`❌ [CustomerAuth] API error: ${response.status}`);
       }
       return null;
     }
 
     const data = await response.json();
-    console.log('🔍 [CustomerAuth] API response data:', JSON.stringify(data, null, 2));
 
     if (!data.customer) {
       console.log('❌ [CustomerAuth] API response has no customer object');
@@ -351,7 +272,7 @@ export async function getCurrentCustomer(): Promise<CustomerUser | null> {
     }
 
     const totalDuration = Date.now() - startTime;
-    console.log(`✅ [CustomerAuth] getCurrentCustomer SUCCESS in ${totalDuration}ms (getUser: ${getUserDuration}ms, API: ${apiDuration}ms)`);
+    console.log(`✅ [CustomerAuth] getCurrentCustomer SUCCESS in ${totalDuration}ms`);
     console.log(`✅ [CustomerAuth] Customer: ${data.customer.email}, Tenant: ${data.customer.tenant_id}`);
 
     return {
@@ -364,9 +285,7 @@ export async function getCurrentCustomer(): Promise<CustomerUser | null> {
     };
   } catch (error) {
     const totalDuration = Date.now() - startTime;
-    console.error(`❌ [CustomerAuth] getCurrentCustomer EXCEPTION after ${totalDuration}ms:`, error);
-    console.error(`❌ [CustomerAuth] Exception type:`, error instanceof Error ? error.constructor.name : typeof error);
-    console.error(`❌ [CustomerAuth] Exception message:`, error instanceof Error ? error.message : String(error));
+    console.error(`❌ [CustomerAuth] Exception after ${totalDuration}ms:`, error);
     return null;
   }
 }
