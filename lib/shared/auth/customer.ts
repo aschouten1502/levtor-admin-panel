@@ -255,28 +255,37 @@ export async function getCurrentCustomer(): Promise<CustomerUser | null> {
       });
     }
 
-    // === DEBUG: First try getSession() for comparison ===
-    console.log('🔍 [CustomerAuth] Step 0: Calling supabase.auth.getSession() for diagnostics...');
+    // === Timeout constant for all Supabase calls ===
+    const AUTH_TIMEOUT_MS = 5000;
+
+    // === Get session with timeout (skip if it hangs) ===
+    console.log('🔍 [CustomerAuth] Step 0: Calling supabase.auth.getSession() with timeout...');
     const getSessionStartTime = Date.now();
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    const getSessionDuration = Date.now() - getSessionStartTime;
-    console.log(`🔍 [CustomerAuth] getSession() completed in ${getSessionDuration}ms`);
-    console.log(`🔍 [CustomerAuth] getSession() result: session=${sessionData?.session ? 'EXISTS' : 'null'}, user=${sessionData?.session?.user?.email || 'null'}, error=${sessionError?.message || 'none'}`);
-    if (sessionData?.session) {
-      console.log(`🔍 [CustomerAuth] Session expires_at: ${sessionData.session.expires_at ? new Date(sessionData.session.expires_at * 1000).toISOString() : 'unknown'}`);
-      console.log(`🔍 [CustomerAuth] Session access_token: ${sessionData.session.access_token ? sessionData.session.access_token.substring(0, 20) + '...' : 'none'}`);
+    let sessionData: { session: { user?: { email?: string }; expires_at?: number; access_token?: string } | null } | null = null;
+
+    try {
+      const sessionPromise = supabase.auth.getSession();
+      const sessionTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('getSession timeout')), AUTH_TIMEOUT_MS);
+      });
+      const sessionResult = await Promise.race([sessionPromise, sessionTimeoutPromise]);
+      sessionData = sessionResult.data;
+      const getSessionDuration = Date.now() - getSessionStartTime;
+      console.log(`🔍 [CustomerAuth] getSession() completed in ${getSessionDuration}ms`);
+      console.log(`🔍 [CustomerAuth] getSession() result: session=${sessionData?.session ? 'EXISTS' : 'null'}, user=${sessionData?.session?.user?.email || 'null'}`);
+    } catch (sessionErr) {
+      console.warn(`⚠️ [CustomerAuth] getSession() timed out after ${AUTH_TIMEOUT_MS}ms - continuing with getUser()`);
     }
 
     // Check of er een geauthenticeerde user is
     // Note: getUser() verifieert met de server, beter dan getSession() na page refresh
     const getUserStartTime = Date.now();
-    console.log('🔍 [CustomerAuth] Step 1: Calling supabase.auth.getUser() with 10s timeout...');
+    console.log('🔍 [CustomerAuth] Step 1: Calling supabase.auth.getUser() with timeout...');
 
     // === Timeout wrapper for getUser() ===
-    const GETUSER_TIMEOUT_MS = 10000;
     const getUserPromise = supabase.auth.getUser();
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`getUser() TIMEOUT after ${GETUSER_TIMEOUT_MS}ms`)), GETUSER_TIMEOUT_MS);
+      setTimeout(() => reject(new Error(`getUser() TIMEOUT after ${AUTH_TIMEOUT_MS}ms`)), AUTH_TIMEOUT_MS);
     });
 
     let user: { id: string; email?: string } | null = null;
@@ -287,10 +296,10 @@ export async function getCurrentCustomer(): Promise<CustomerUser | null> {
       user = result.data.user;
       userError = result.error;
     } catch (timeoutErr) {
-      console.error(`⏱️ [CustomerAuth] getUser() TIMEOUT! Call did not return within ${GETUSER_TIMEOUT_MS}ms`);
-      console.error(`⏱️ [CustomerAuth] This indicates the Supabase client is hanging, possibly due to missing/invalid cookies or network issues`);
-      console.error(`⏱️ [CustomerAuth] Session from getSession() was: ${sessionData?.session ? 'present' : 'null'}`);
-      throw timeoutErr;
+      console.error(`⏱️ [CustomerAuth] getUser() TIMEOUT after ${AUTH_TIMEOUT_MS}ms`);
+      console.error(`⏱️ [CustomerAuth] This indicates the Supabase client is hanging`);
+      // Don't throw - return null to trigger redirect to login
+      return null;
     }
 
     const getUserDuration = Date.now() - getUserStartTime;
