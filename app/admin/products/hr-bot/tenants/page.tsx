@@ -14,7 +14,7 @@ function TenantCard({ tenant }: { tenant: TenantWithStats }) {
 
   return (
     <Link
-      href={`/admin/tenants/${tenant.id}`}
+      href={`/admin/products/hr-bot/tenants/${tenant.id}`}
       className="block bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg hover:border-blue-300 transition-all"
     >
       <div className="flex items-start justify-between mb-4">

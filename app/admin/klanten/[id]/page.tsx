@@ -419,7 +419,7 @@ export default function AdminKlantDetailPage({
                     </div>
                   </div>
                   <Link
-                    href={`/admin/branding?tenant=${id}`}
+                    href={`/admin/products/hr-bot/branding/${id}`}
                     className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                   >
                     Configureren →
@@ -437,7 +437,7 @@ export default function AdminKlantDetailPage({
           {/* Quick Links */}
           <div className="grid grid-cols-2 gap-4">
             <Link
-              href={`/admin/branding?tenant=${id}`}
+              href={`/admin/products/hr-bot/branding/${id}`}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center gap-4">

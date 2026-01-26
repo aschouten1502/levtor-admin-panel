@@ -151,7 +151,7 @@ export default function BrandingOverviewPage() {
           {tenants.map((tenant) => (
             <Link
               key={tenant.id}
-              href={`/admin/branding/${tenant.id}`}
+              href={`/admin/products/hr-bot/branding/${tenant.id}`}
               className="group bg-white rounded-xl border border-gray-200 p-6 hover:border-purple-300 hover:shadow-lg transition-all"
             >
               <div className="flex items-start gap-4">
