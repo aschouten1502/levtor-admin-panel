@@ -13,15 +13,16 @@ type PatternColorMode = 'grayscale' | 'original' | 'tinted';
 
 /**
  * Get scale classes for logo pattern
+ * Updated with better desktop (lg/xl) scaling
  */
 function getLogoScaleClasses(scale: PatternScale): string {
   switch (scale) {
     case 'small':
-      return 'w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12';
+      return 'w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-16 lg:h-16 xl:w-20 xl:h-20';
     case 'large':
-      return 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28';
+      return 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-32 lg:h-32 xl:w-40 xl:h-40';
     default: // medium
-      return 'w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20';
+      return 'w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-24 lg:h-24 xl:w-32 xl:h-32';
   }
 }
 

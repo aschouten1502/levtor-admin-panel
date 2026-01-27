@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { getTenantById } from '@/lib/admin/tenant-service';
 import { uploadDocument, deleteDocument } from '@/lib/admin/storage-service';
 import { processDocument, listDocuments, deleteDocument as deleteDocumentFromDB } from '@/lib/rag/processor';
@@ -54,6 +55,19 @@ export async function POST(
       );
     }
 
+    // Zoek HR Bot product voor deze tenant (nodig voor portal sync)
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: tenantProduct } = await supabase
+      .from('tenant_products')
+      .select('id')
+      .eq('tenant_id', id)
+      .eq('product_id', 'hr_bot')
+      .single();
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -99,7 +113,8 @@ export async function POST(
       id,
       file.name,
       buffer,
-      uploadResult.path
+      uploadResult.path,
+      tenantProduct?.id  // Link document to tenant product for portal sync
     );
 
     if (!processResult.success) {

@@ -230,7 +230,7 @@ export default function QATestPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Link
-                        href={`/admin/test/${tenant.tenant_id}`}
+                        href={`/admin/products/hr-bot/test/${tenant.tenant_id}`}
                         className="inline-flex items-center px-3 py-1.5 border border-blue-600 text-blue-600 hover:bg-blue-50 rounded-md text-sm font-medium transition"
                       >
                         Test

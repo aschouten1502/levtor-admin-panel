@@ -144,7 +144,7 @@ export default function TestResultsPage({ params }: PageProps) {
           <span>/</span>
           <Link href="/admin/products/hr-bot/test" className="hover:text-gray-700">QA Testing</Link>
           <span>/</span>
-          <Link href={`/admin/test/${tenantId}`} className="hover:text-gray-700">{tenantId}</Link>
+          <Link href={`/admin/products/hr-bot/test/${tenantId}`} className="hover:text-gray-700">{tenantId}</Link>
           <span>/</span>
           <span className="text-gray-900 font-medium">Resultaten</span>
         </nav>
@@ -190,7 +190,7 @@ export default function TestResultsPage({ params }: PageProps) {
               </>
             )}
             <Link
-              href={`/admin/test/${tenantId}`}
+              href={`/admin/products/hr-bot/test/${tenantId}`}
               className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition"
             >
               Terug

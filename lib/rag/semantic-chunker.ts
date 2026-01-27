@@ -99,6 +99,7 @@ export async function semanticChunk(
   options: Partial<SmartChunkingOptions> = {}
 ): Promise<{
   chunks: string[];
+  chunkPositions: number[];  // Start positions for each chunk (estimated)
   cost: number;
   tokensUsed: number;
 }> {
@@ -108,6 +109,7 @@ export async function semanticChunk(
   if (text.length < 500) {
     return {
       chunks: [text.trim()],
+      chunkPositions: [0],
       cost: 0,
       tokensUsed: 0
     };
@@ -127,15 +129,26 @@ export async function semanticChunk(
     // Split in secties als document te lang is
     const sections = splitIntoSections(text, maxCharsPerRequest);
 
+    // Track positions for each section
+    let cumulativeSectionStart = 0;
+    const allPositions: number[] = [];
+
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
       console.log(`   Processing section ${i + 1}/${sections.length} (${section.length} chars)`);
 
       const result = await processSection(openai, section, model);
 
+      // Adjust chunk positions relative to full document
+      const adjustedPositions = result.chunkPositions.map(pos => pos + cumulativeSectionStart);
+
       allChunks = [...allChunks, ...result.chunks];
+      allPositions.push(...adjustedPositions);
       totalCost += result.cost;
       totalTokens += result.tokensUsed;
+
+      // Update cumulative start for next section
+      cumulativeSectionStart += section.length;
     }
 
     console.log(`✅ [Semantic] Created ${allChunks.length} semantic chunks`);
@@ -143,6 +156,7 @@ export async function semanticChunk(
 
     return {
       chunks: allChunks,
+      chunkPositions: allPositions,
       cost: totalCost,
       tokensUsed: totalTokens
     };
@@ -153,6 +167,7 @@ export async function semanticChunk(
     // Fallback: return originele tekst als één chunk
     return {
       chunks: [text.trim()],
+      chunkPositions: [0],
       cost: 0,
       tokensUsed: 0
     };
@@ -168,6 +183,7 @@ async function processSection(
   model: 'gpt-4o-mini' | 'gpt-4o'
 ): Promise<{
   chunks: string[];
+  chunkPositions: number[];
   cost: number;
   tokensUsed: number;
 }> {
@@ -187,8 +203,8 @@ async function processSection(
 
   const outputText = response.choices[0]?.message?.content || text;
 
-  // Parse chunks uit output
-  const chunks = parseChunksFromOutput(outputText);
+  // Parse chunks uit output with positions
+  const { chunks, positions } = parseChunksFromOutputWithPositions(outputText, text.length);
 
   // Bereken kosten
   const inputTokens = response.usage?.prompt_tokens || 0;
@@ -200,6 +216,7 @@ async function processSection(
 
   return {
     chunks,
+    chunkPositions: positions,
     cost,
     tokensUsed: totalTokens
   };
@@ -263,63 +280,97 @@ function findGoodSplitPoint(text: string, targetIndex: number): number {
   return bestIndex;
 }
 
+// Patronen die wijzen op AI instructie-tekst (niet documentinhoud)
+const AI_INSTRUCTION_PATTERNS = [
+  /^Hier is de (geanalyseerde )?tekst.*/i,
+  /^Hier zijn de chunks.*/i,
+  /^De tekst is opgedeeld.*/i,
+  /^Ik heb de tekst.*/i,
+  /^De volgende chunks.*/i,
+  /^Output:/i,
+  /^Chunks:/i,
+  /^Resultaat:/i,
+  /^Geanalyseerde tekst:/i,
+  /met de optimale chunk grenzen/i,
+];
+
 /**
  * Parse chunks uit AI output met |||CHUNK||| markers
- * Filtert ook AI instructie-tekst uit die per ongeluk in de output kan zitten
+ * Retourneert ook geschatte posities voor elke chunk
+ *
+ * @param output - AI output met |||CHUNK||| markers
+ * @param originalTextLength - Lengte van de originele input tekst (voor proportionele positie mapping)
+ * @returns Object met chunks en hun geschatte start posities
  */
-function parseChunksFromOutput(output: string): string[] {
+function parseChunksFromOutputWithPositions(
+  output: string,
+  originalTextLength: number
+): { chunks: string[]; positions: number[] } {
   const marker = '|||CHUNK|||';
 
-  // Patronen die wijzen op AI instructie-tekst (niet documentinhoud)
-  const AI_INSTRUCTION_PATTERNS = [
-    /^Hier is de (geanalyseerde )?tekst.*/i,
-    /^Hier zijn de chunks.*/i,
-    /^De tekst is opgedeeld.*/i,
-    /^Ik heb de tekst.*/i,
-    /^De volgende chunks.*/i,
-    /^Output:/i,
-    /^Chunks:/i,
-    /^Resultaat:/i,
-    /^Geanalyseerde tekst:/i,
-    /met de optimale chunk grenzen/i,
-  ];
-
-  // Split op marker
+  // Track posities in de AI output
   const parts = output.split(marker);
+  const chunks: string[] = [];
+  const positions: number[] = [];
 
-  // Filter lege chunks, trim, en verwijder AI instructies
-  const chunks = parts
-    .map(chunk => {
-      let cleaned = chunk.trim();
+  let currentOutputPosition = 0;
 
-      // Verwijder AI instructie-tekst aan het begin van de chunk
+  for (const part of parts) {
+    let cleaned = part.trim();
+
+    // Verwijder AI instructie-tekst aan het begin van de chunk
+    for (const pattern of AI_INSTRUCTION_PATTERNS) {
+      const match = cleaned.match(pattern);
+      if (match && cleaned.indexOf(match[0]) === 0) {
+        const newlineIndex = cleaned.indexOf('\n');
+        if (newlineIndex > 0) {
+          cleaned = cleaned.slice(newlineIndex + 1).trim();
+        }
+      }
+    }
+
+    // Filter lege of instructie-only chunks
+    if (cleaned.length === 0) {
+      currentOutputPosition += part.length + marker.length;
+      continue;
+    }
+
+    if (cleaned.length < 50) {
+      let isInstruction = false;
       for (const pattern of AI_INSTRUCTION_PATTERNS) {
-        // Check of de chunk begint met een instructie patroon
-        const match = cleaned.match(pattern);
-        if (match && cleaned.indexOf(match[0]) === 0) {
-          // Verwijder de instructie en alles tot de eerste newline
-          const newlineIndex = cleaned.indexOf('\n');
-          if (newlineIndex > 0) {
-            cleaned = cleaned.slice(newlineIndex + 1).trim();
-          }
+        if (pattern.test(cleaned)) {
+          isInstruction = true;
+          break;
         }
       }
-
-      return cleaned;
-    })
-    .filter(chunk => {
-      // Filter chunks die alleen instructie-tekst zijn
-      if (chunk.length === 0) return false;
-      if (chunk.length < 50) {
-        // Zeer korte chunks checken op instructie-patronen
-        for (const pattern of AI_INSTRUCTION_PATTERNS) {
-          if (pattern.test(chunk)) return false;
-        }
+      if (isInstruction) {
+        currentOutputPosition += part.length + marker.length;
+        continue;
       }
-      return true;
-    });
+    }
 
-  return chunks;
+    // Schat positie in originele tekst proportioneel
+    // De AI output zou ongeveer even lang moeten zijn als de input (minus/plus markers)
+    const outputTotalLength = output.length;
+    const proportionalPosition = Math.floor(
+      (currentOutputPosition / outputTotalLength) * originalTextLength
+    );
+
+    chunks.push(cleaned);
+    positions.push(proportionalPosition);
+
+    currentOutputPosition += part.length + marker.length;
+  }
+
+  return { chunks, positions };
+}
+
+/**
+ * Parse chunks uit AI output met |||CHUNK||| markers (legacy, without positions)
+ * @deprecated Use parseChunksFromOutputWithPositions instead
+ */
+function parseChunksFromOutput(output: string): string[] {
+  return parseChunksFromOutputWithPositions(output, output.length).chunks;
 }
 
 // ========================================

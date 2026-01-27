@@ -31,6 +31,7 @@ import {
 } from './types';
 import { rerankResults, isRerankingEnabled, RerankResultWithPositions } from './reranker';
 import { translateQueryOptimized, TranslationResult } from './query-translator';
+import { detectFollowUpQuestion, expandQueryWithContext, ConversationMessage, QueryExpansionResult } from './conversation-context';
 
 // ========================================
 // EXTENDED RESPONSE TYPE
@@ -385,7 +386,7 @@ async function enhancedVectorSearch(
     p_query_embedding: `[${embedding.join(',')}]`,
     p_query_text: queryText,
     p_top_k: topK,
-    p_similarity_threshold: 0.30,
+    p_similarity_threshold: 0.45,  // Verhoogd van 0.30 naar 0.45 voor betere relevantie
     p_vector_weight: 0.6,
     p_keyword_weight: 0.4
   });
@@ -566,8 +567,9 @@ function mergeAndRankResults(
 export async function retrieveContext(
   tenantId: string,
   userQuestion: string,
-  topK: number = 12,  // Verhoogd van 8 voor meer context
-  skipTenantValidation: boolean = false
+  topK: number = 6,  // Verlaagd van 12 naar 6 - chunks 5-12 hadden slechts 2-4% relevantie
+  skipTenantValidation: boolean = false,
+  conversationHistory?: ConversationMessage[]  // Voor follow-up query expansion
 ): Promise<ContextResponseWithDetails> {
   const supabase = getSupabaseClient();
 
@@ -636,6 +638,27 @@ export async function retrieveContext(
   } catch (translationError) {
     console.error('⚠️ [RAG] Translation failed, using original query:', translationError);
     // Continue with original query
+  }
+
+  // ========================================
+  // CONVERSATION-AWARE QUERY EXPANSION
+  // ========================================
+  let contextExpansionResult: QueryExpansionResult | undefined;
+
+  // Check of dit een follow-up vraag is die context nodig heeft
+  if (conversationHistory && conversationHistory.length > 0 &&
+      detectFollowUpQuestion(searchQuery)) {
+    console.log('🔍 [RAG] Follow-up question detected, expanding with conversation context...');
+
+    contextExpansionResult = await expandQueryWithContext(
+      searchQuery,
+      conversationHistory
+    );
+
+    if (contextExpansionResult.wasExpanded) {
+      searchQuery = contextExpansionResult.expandedQuery;
+      console.log(`✅ [RAG] Query expanded to: "${searchQuery}"`);
+    }
   }
 
   // 1. Genereer alternatieve queries voor multi-query retrieval
@@ -828,6 +851,20 @@ export async function retrieveContext(
 
   rerankEndTime = Date.now();
 
+  // ========================================
+  // MINIMUM RELEVANCE SCORE FILTER
+  // ========================================
+  // Filter chunks met te lage relevantie - deze zijn pure ruis
+  const MIN_RELEVANCE_SCORE = 0.10; // 10% minimum
+  const preFilterCount = mergedResults.length;
+
+  mergedResults = mergedResults.filter(r => r.similarity >= MIN_RELEVANCE_SCORE);
+
+  const filteredCount = preFilterCount - mergedResults.length;
+  if (filteredCount > 0) {
+    console.log(`\n🔍 [RAG] Relevance filter: removed ${filteredCount} chunks below ${MIN_RELEVANCE_SCORE * 100}% threshold`);
+  }
+
   console.log(`\n✅ [RAG] Final results: ${mergedResults.length} chunks`);
 
   // 4. Bouw context en citations
@@ -893,12 +930,16 @@ export async function retrieveContext(
 
   // 6. Log cost comparison
   const translationCost = translationResult?.cost || 0;
-  const totalRAGCost = totalCost + rerankCost + translationCost;
+  const contextExpansionCost = contextExpansionResult?.cost || 0;
+  const totalRAGCost = totalCost + rerankCost + translationCost + contextExpansionCost;
 
   console.log('\n📊 [RAG] ========== CONTEXT SUMMARY ==========');
   console.log('📄 [RAG] Total context characters:', contextText.length);
   if (translationCost > 0) {
     console.log(`💵 [RAG] Translation cost: $${translationCost.toFixed(6)} (GPT-4o-mini)`);
+  }
+  if (contextExpansionCost > 0) {
+    console.log(`💵 [RAG] Context expansion cost: $${contextExpansionCost.toFixed(6)} (GPT-4o-mini)`);
   }
   console.log(`💵 [RAG] Embedding cost: $${totalCost.toFixed(6)} (${allQueries.length} queries)`);
   console.log(`💵 [RAG] Rerank cost: $${rerankCost.toFixed(6)} (Cohere)`);
@@ -943,6 +984,13 @@ export async function retrieveContext(
         wasTranslated: translationResult.wasTranslated,
         translationCost: translationResult.cost,
         translationLatencyMs: translationResult.latencyMs
+      } : undefined,
+      // Conversation-aware query expansion (v2.3)
+      contextExpansion: contextExpansionResult ? {
+        wasExpanded: contextExpansionResult.wasExpanded,
+        expandedQuery: contextExpansionResult.expandedQuery,
+        cost: contextExpansionResult.cost,
+        latencyMs: contextExpansionResult.latencyMs
       } : undefined
     },
     search: {
@@ -953,13 +1001,21 @@ export async function retrieveContext(
       queries: searchQueries,
       rawResults,
       matchedTerms: enhancedResult.matchedTerms.length > 0 ? enhancedResult.matchedTerms : undefined,
-      mergeStats
+      mergeStats,
+      // Relevance filtering stats (v2.4)
+      relevanceFilter: {
+        minScore: MIN_RELEVANCE_SCORE,
+        beforeFilter: preFilterCount,
+        afterFilter: mergedResults.length,
+        removedCount: filteredCount
+      }
     },
     reranking: rerankingDetails,
     costs: {
       embedding: totalCost,
       reranking: rerankCost,
       translation: translationCost,  // Translation cost (GPT-4o-mini)
+      contextExpansion: contextExpansionCost,  // Context expansion cost (GPT-4o-mini)
       openai: 0, // Will be set by route.ts
       total: totalRAGCost
     },

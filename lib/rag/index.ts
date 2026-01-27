@@ -39,6 +39,20 @@ export {
   DEFAULT_CHUNKING_OPTIONS
 } from './chunking';
 
+// Text Sanitization (for handling problematic PDF characters)
+export {
+  sanitizeText,
+  validateForEmbedding,
+  estimateTokenCount,
+  exceedsTokenLimit,
+  sanitizeBatch
+} from './text-sanitizer';
+
+export type {
+  TextValidationResult,
+  BatchSanitizationResult
+} from './text-sanitizer';
+
 // Reranking
 export {
   rerankResults,
@@ -59,6 +73,17 @@ export {
 } from './query-translator';
 
 export type { TranslationResult } from './query-translator';
+
+// Conversation-Aware Query Expansion (v2.3)
+export {
+  detectFollowUpQuestion,
+  expandQueryWithContext
+} from './conversation-context';
+
+export type {
+  ConversationMessage,
+  QueryExpansionResult
+} from './conversation-context';
 
 // Types
 export type {

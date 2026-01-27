@@ -64,13 +64,6 @@ export default function ProductDetailPage() {
     }
   }, [productId]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nl-NL', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
-  };
-
   if (isLoading) {
     return (
       <div className="max-w-4xl animate-pulse">
@@ -162,12 +155,6 @@ export default function ProductDetailPage() {
           <p className="text-sm text-gray-500 mb-1">Totaal chats</p>
           <p className="text-2xl font-bold text-gray-900">
             {product.stats.chats_total}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm text-gray-500 mb-1">Kosten (deze maand)</p>
-          <p className="text-2xl font-bold text-gray-900">
-            {formatCurrency(product.stats.cost_this_month)}
           </p>
         </div>
       </div>

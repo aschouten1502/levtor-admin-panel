@@ -125,7 +125,7 @@ export default function ImplementOverviewPage() {
           {tenants.map((tenant) => (
             <Link
               key={tenant.id}
-              href={`/admin/implement/${tenant.id}`}
+              href={`/admin/products/hr-bot/implement/${tenant.id}`}
               className="group bg-white rounded-xl border border-gray-200 p-6 hover:border-blue-300 hover:shadow-lg transition-all"
             >
               <div className="flex items-start gap-4">

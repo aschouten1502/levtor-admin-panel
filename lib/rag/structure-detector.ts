@@ -32,11 +32,27 @@ const STRUCTURE_PATTERNS = {
     type: 'chapter' as const
   },
 
+  // Bijlagen/Appendices: "Bijlage 1", "Bijlage A", "Appendix 2", "Annex I"
+  // Generiek voor alle CAO's en juridische documenten
+  appendix: {
+    pattern: /^(?:BIJLAGE|Bijlage|APPENDIX|Appendix|ANNEX|Annex)\s+([A-Z0-9]+)\s*[:\-–.]?\s*(.*)$/im,
+    level: 1,
+    type: 'chapter' as const
+  },
+
   // Artikelen: "Artikel 4.3", "Art. 12", "Article 5", "ARTIKEL 2.1"
   article: {
     pattern: /^(?:ARTIKEL|Artikel|ART\.?|Art\.?|ARTICLE|Article)\s+(\d+(?:\.\d+)*)\s*[:\-–.]?\s*(.*)$/im,
     level: 2,
     type: 'article' as const
+  },
+
+  // Lid binnen artikel: "Lid 1", "Lid 2", "1." gevolgd door tekst binnen artikel context
+  // Standaard CAO structuur voor subsecties binnen artikelen
+  lid: {
+    pattern: /^(?:LID|Lid)\s+(\d+)\s*[:\-–.]?\s*(.*)$/im,
+    level: 3,
+    type: 'section' as const
   },
 
   // Secties: "§ 2.1", "Section 3.2", "Sectie 1"
@@ -46,10 +62,32 @@ const STRUCTURE_PATTERNS = {
     type: 'section' as const
   },
 
+  // Definities sectie: "Definities", "Begripsbepalingen", "Begrippen"
+  // Vaak aan het begin van CAO's
+  definitions: {
+    pattern: /^(?:DEFINITIES|Definities|BEGRIPSBEPALINGEN|Begripsbepalingen|BEGRIPPEN|Begrippen|DEFINITIONS|Definitions)\s*$/im,
+    level: 2,
+    type: 'section' as const
+  },
+
+  // Overgangs- en slotbepalingen: standaard CAO secties
+  transitionProvisions: {
+    pattern: /^(?:OVERGANGSBEPALINGEN|Overgangsbepalingen|SLOTBEPALINGEN|Slotbepalingen|INWERKINGTREDING|Inwerkingtreding)\s*$/im,
+    level: 2,
+    type: 'section' as const
+  },
+
   // Genummerde secties met titel: "1. Inleiding", "2.3 Vakantiedagen"
   numberedSection: {
     pattern: /^(\d+(?:\.\d+)*)\.\s+([A-Z][a-zA-Z\s]{2,50})$/m,
     level: 2,
+    type: 'section' as const
+  },
+
+  // Sub-artikelen: "sub a", "sub 1", of diepere nummering "4.3.1"
+  subArticle: {
+    pattern: /^(?:SUB|Sub|sub)\s+([a-z0-9]+)\s*[:\-–.]?\s*(.*)$/im,
+    level: 3,
     type: 'section' as const
   },
 
@@ -156,8 +194,18 @@ function createStructureFromMatch(
       title = match[2]?.trim() || undefined;
       break;
 
+    case 'appendix':
+      identifier = `Bijlage ${match[1]}`;
+      title = match[2]?.trim() || undefined;
+      break;
+
     case 'article':
       identifier = `Artikel ${match[1]}`;
+      title = match[2]?.trim() || undefined;
+      break;
+
+    case 'lid':
+      identifier = `Lid ${match[1]}`;
       title = match[2]?.trim() || undefined;
       break;
 
@@ -166,8 +214,21 @@ function createStructureFromMatch(
       title = match[2]?.trim() || undefined;
       break;
 
+    case 'definitions':
+      title = 'Definities';
+      break;
+
+    case 'transitionProvisions':
+      title = match[0]?.trim() || 'Overgangsbepalingen';
+      break;
+
     case 'numberedSection':
       identifier = match[1];
+      title = match[2]?.trim() || undefined;
+      break;
+
+    case 'subArticle':
+      identifier = `sub ${match[1]}`;
       title = match[2]?.trim() || undefined;
       break;
 

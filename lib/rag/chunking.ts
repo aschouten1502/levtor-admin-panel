@@ -40,11 +40,11 @@ import { semanticChunk } from './semantic-chunker';
  */
 const DEFAULT_SMART_OPTIONS: SmartChunkingOptions = {
   // VERHOOGD: Grotere chunks voor betere context bij juridische documenten
-  // 1500 → 3000 chars (~500-800 woorden) voor CAO artikelen etc.
-  targetChunkSize: 3000,
-  minChunkSize: 500,       // Was 200 - voorkomt te kleine fragmenten
-  maxChunkSize: 4000,      // Was 2500 - ruimte voor volledige artikelen
-  overlapPercentage: 20,   // Was 15 - meer overlap voor context
+  // CAO artikelen en regelgeving hebben vaak meer context nodig
+  targetChunkSize: 3500,   // Was 3000 - ruimte voor volledige artikelen
+  minChunkSize: 600,       // Was 500 - voorkomt te kleine fragmenten
+  maxChunkSize: 5000,      // Was 4000 - ruimte voor complete secties
+  overlapPercentage: 25,   // Was 20 - meer overlap voor context continuïteit
 
   // Alle 4 opties enabled
   enableStructureDetection: true,
@@ -133,13 +133,15 @@ export async function smartChunkDocument(
 
   // 3. Maak chunks
   let rawChunks: string[];
+  let chunkPositions: number[] | null = null;  // Posities van semantic chunker (indien beschikbaar)
   let semanticCost = 0;
   let semanticTokens = 0;
 
   if (opts.enableSemanticChunking) {
-    // AI-powered chunking
+    // AI-powered chunking - returns both chunks and their estimated positions
     const result = await semanticChunk(fullText, opts);
     rawChunks = result.chunks;
+    chunkPositions = result.chunkPositions;
     semanticCost = result.cost;
     semanticTokens = result.tokensUsed;
   } else if (opts.enableSmartBoundaries) {
@@ -153,11 +155,36 @@ export async function smartChunkDocument(
   console.log(`📦 [SmartChunk] Created ${rawChunks.length} raw chunks`);
 
   // 4. Converteer naar StructuredChunks met metadata
-  // Gebruik de boundaries voor correcte paginanummer toewijzing
-  const structuredChunks = rawChunks.map((content, idx) => {
+  // Track lastKnownPosition om sequentieel door het document te zoeken
+  let lastKnownPosition = 0;
+  const totalChunks = rawChunks.length;
+
+  const structuredChunks: StructuredChunk[] = [];
+
+  for (let idx = 0; idx < rawChunks.length; idx++) {
+    const content = rawChunks[idx];
     const trimmedContent = content.trim();
-    const startChar = findChunkStartPosition(fullText, trimmedContent, idx);
-    // FIXED: Gebruik boundaries in plaats van pages array
+
+    // Gebruik chunkPositions als HINT voor waar te beginnen zoeken, niet als definitieve positie
+    // De semantic chunker geeft proportionele schattingen die vaak niet kloppen
+    const searchHint = (chunkPositions && chunkPositions[idx] !== undefined)
+      ? Math.max(0, chunkPositions[idx] - 500)  // Start zoeken 500 chars eerder dan hint
+      : lastKnownPosition;
+
+    // Zoek ALTIJD de echte positie met verbeterde fuzzy matching
+    const startChar = findChunkStartPosition(
+      fullText,
+      trimmedContent,
+      searchHint,
+      idx,           // chunk index voor proportionele fallback
+      totalChunks    // totaal chunks voor proportionele fallback
+    );
+
+    // Update lastKnownPosition - BELANGRIJK: altijd vooruit gaan om document sequentieel te doorlopen
+    // Gebruik 80% van chunk lengte om overlap te compenseren
+    lastKnownPosition = Math.max(lastKnownPosition, startChar + Math.floor(trimmedContent.length * 0.8));
+
+    // Bepaal paginanummer op basis van positie in de gecombineerde tekst
     const pageNumber = findPageForPosition(boundaries, startChar);
 
     // Zoek structuur voor deze chunk
@@ -190,8 +217,8 @@ export async function smartChunkDocument(
       }
     };
 
-    return chunk;
-  });
+    structuredChunks.push(chunk);
+  }
 
   // 5. Filter te kleine chunks (merge met vorige)
   const finalChunks = mergeSmallChunks(structuredChunks, opts.minChunkSize);
@@ -401,13 +428,84 @@ function combinePages(pages: Array<{ pageNumber: number; text: string }>): Combi
 }
 
 /**
- * Vindt de start positie van een chunk in de originele tekst
+ * Vindt de start positie van een chunk in de originele tekst.
+ * Gebruikt meerdere zoekstrategieën met fuzzy matching.
+ * Bij falen: proportionele schatting op basis van chunk index (NIET lastKnownPosition).
+ *
+ * @param fullText - De volledige tekst van het document
+ * @param chunkContent - De content van de chunk om te vinden
+ * @param lastKnownPosition - De positie waar de vorige chunk eindigde (voor sequentiële search)
+ * @param chunkIndex - Index van de huidige chunk (voor proportionele fallback)
+ * @param totalChunks - Totaal aantal chunks (voor proportionele fallback)
+ * @returns De startpositie van de chunk in fullText
  */
-function findChunkStartPosition(fullText: string, chunkContent: string, chunkIndex: number): number {
-  // Simpele substring search
-  const searchStart = chunkIndex === 0 ? 0 : Math.max(0, fullText.length / 2 - 5000);
-  const index = fullText.indexOf(chunkContent.slice(0, 100), searchStart);
-  return index >= 0 ? index : 0;
+function findChunkStartPosition(
+  fullText: string,
+  chunkContent: string,
+  lastKnownPosition: number,
+  chunkIndex: number = 0,
+  totalChunks: number = 1
+): number {
+  // Gebruik een groter fragment voor betrouwbaardere matching
+  const searchFragment = chunkContent.slice(0, 150).trim();
+
+  if (searchFragment.length < 20) {
+    // Te kort om betrouwbaar te matchen - gebruik proportionele schatting
+    const estimated = Math.floor((chunkIndex / Math.max(totalChunks, 1)) * fullText.length);
+    console.warn(`⚠️ [Chunking] Fragment too short for chunk ${chunkIndex}, estimated position: ${estimated}`);
+    return estimated;
+  }
+
+  // Zoek vanaf de laatste bekende positie (met wat marge voor overlap)
+  const searchStart = Math.max(0, lastKnownPosition - 500);
+
+  // Poging 1: Exact match vanaf lastKnownPosition
+  let index = fullText.indexOf(searchFragment, searchStart);
+  if (index >= 0) {
+    return index;
+  }
+
+  // Poging 2: Korter fragment (80 chars) voor meer flexibiliteit
+  const shortFragment = chunkContent.slice(0, 80).trim();
+  index = fullText.indexOf(shortFragment, searchStart);
+  if (index >= 0) {
+    return index;
+  }
+
+  // Poging 3: Zoek vanaf begin document (chunk kan door overlap eerder voorkomen)
+  index = fullText.indexOf(searchFragment);
+  if (index >= 0) {
+    return index;
+  }
+
+  // Poging 4: Nog korter fragment (50 chars) vanaf begin
+  const veryShortFragment = chunkContent.slice(0, 50).trim();
+  index = fullText.indexOf(veryShortFragment);
+  if (index >= 0) {
+    return index;
+  }
+
+  // Poging 5: Normaliseer whitespace en zoek opnieuw
+  const normalizedFragment = searchFragment.replace(/\s+/g, ' ');
+  const normalizedText = fullText.replace(/\s+/g, ' ');
+  const normalizedStart = Math.floor(searchStart * (normalizedText.length / fullText.length));
+  index = normalizedText.indexOf(normalizedFragment, normalizedStart);
+  if (index >= 0) {
+    // Map terug naar originele positie (geschat)
+    return Math.floor(index * (fullText.length / normalizedText.length));
+  }
+
+  // Poging 6: Zoek genormaliseerd vanaf begin
+  index = normalizedText.indexOf(normalizedFragment);
+  if (index >= 0) {
+    return Math.floor(index * (fullText.length / normalizedText.length));
+  }
+
+  // FALLBACK: Proportionele schatting op basis van chunk index
+  // Dit is VEEL beter dan lastKnownPosition retourneren (die vaak 0 is)!
+  const estimatedPosition = Math.floor((chunkIndex / Math.max(totalChunks, 1)) * fullText.length);
+  console.warn(`⚠️ [Chunking] Could not find chunk ${chunkIndex}, estimated position: ${estimatedPosition} (of ${fullText.length})`);
+  return estimatedPosition;
 }
 
 /**

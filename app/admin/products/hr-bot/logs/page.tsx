@@ -355,7 +355,7 @@ export default function LogsOverviewPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <Link
-                        href={`/admin/logs/${tenant.tenant_id}`}
+                        href={`/admin/products/hr-bot/logs/${tenant.tenant_id}`}
                         className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium text-sm"
                       >
                         Bekijk logs

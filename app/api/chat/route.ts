@@ -201,13 +201,20 @@ export async function POST(request: NextRequest) {
     // ========================================
     // STEP 3: Haal context op via Supabase RAG
     // ========================================
+    // Pass conversationHistory for follow-up query expansion
     const {
       contextText,
       citations,
       embeddingTokens,
       embeddingCost,
       ragDetails  // NEW: Capture RAG pipeline details for logging
-    } = await retrieveContext(tenantId, message);
+    } = await retrieveContext(
+      tenantId,
+      message,
+      12,                    // topK
+      false,                 // skipTenantValidation
+      conversationHistory    // For conversation-aware query expansion
+    );
 
     // Voor backwards compatibility gebruiken we dezelfde variabelenamen
     const ragTokens = embeddingTokens;

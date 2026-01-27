@@ -15,6 +15,7 @@
 
 import OpenAI from 'openai';
 import { EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL, EmbeddingConfig } from './types';
+import { sanitizeText, validateForEmbedding, exceedsTokenLimit, estimateTokenCount } from './text-sanitizer';
 
 // ========================================
 // OPENAI CLIENT
@@ -61,26 +62,51 @@ export async function generateEmbedding(
     throw new Error(`Unknown embedding model: ${modelName}`);
   }
 
+  // Validate and sanitize input text
+  const { valid, issues, sanitized } = validateForEmbedding(text);
+
+  if (!valid && issues.length > 0) {
+    console.warn(`⚠️ [Embeddings] Text had issues: ${issues.join(', ')}`);
+  }
+
+  const cleanText = sanitized;
+
+  if (cleanText.length === 0) {
+    throw new Error('Text is empty after sanitization');
+  }
+
+  // Check token limit before API call
+  if (exceedsTokenLimit(cleanText)) {
+    const estimated = estimateTokenCount(cleanText);
+    throw new Error(`Text exceeds token limit (estimated ${estimated} tokens, limit is 8191)`);
+  }
+
   const client = getOpenAIClient();
 
-  console.log(`🔢 [Embeddings] Generating embedding for ${text.length} chars`);
+  console.log(`🔢 [Embeddings] Generating embedding for ${cleanText.length} chars (sanitized from ${text.length})`);
 
-  const response = await client.embeddings.create({
-    model: config.model,
-    input: text,
-    dimensions: config.dimensions
-  });
+  try {
+    const response = await client.embeddings.create({
+      model: config.model,
+      input: cleanText,
+      dimensions: config.dimensions
+    });
 
-  const tokens = response.usage?.total_tokens || 0;
-  const cost = (tokens / 1_000_000) * config.costPer1MTokens;
+    const tokens = response.usage?.total_tokens || 0;
+    const cost = (tokens / 1_000_000) * config.costPer1MTokens;
 
-  console.log(`✅ [Embeddings] Generated: ${tokens} tokens, $${cost.toFixed(6)}`);
+    console.log(`✅ [Embeddings] Generated: ${tokens} tokens, $${cost.toFixed(6)}`);
 
-  return {
-    embedding: response.data[0].embedding,
-    tokens,
-    cost
-  };
+    return {
+      embedding: response.data[0].embedding,
+      tokens,
+      cost
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [Embeddings] API error: ${errorMessage}`);
+    throw new Error(`Embedding generation failed: ${errorMessage}`);
+  }
 }
 
 // ========================================
@@ -102,6 +128,7 @@ export async function generateEmbeddingsBatch(
   embeddings: number[][];
   totalTokens: number;
   totalCost: number;
+  failedIndices: number[];
 }> {
   const config = EMBEDDING_MODELS[modelName];
   if (!config) {
@@ -112,7 +139,8 @@ export async function generateEmbeddingsBatch(
     return {
       embeddings: [],
       totalTokens: 0,
-      totalCost: 0
+      totalCost: 0,
+      failedIndices: []
     };
   }
 
@@ -120,43 +148,128 @@ export async function generateEmbeddingsBatch(
 
   console.log(`🔢 [Embeddings] Batch processing ${texts.length} texts`);
 
+  // Pre-sanitize all texts and track issues
+  const sanitizedTexts: string[] = [];
+  const textIssues: Map<number, string[]> = new Map();
+  let totalSanitizationIssues = 0;
+
+  for (let i = 0; i < texts.length; i++) {
+    const { valid, issues, sanitized } = validateForEmbedding(texts[i]);
+    sanitizedTexts.push(sanitized);
+
+    if (!valid && issues.length > 0) {
+      textIssues.set(i, issues);
+      totalSanitizationIssues++;
+    }
+  }
+
+  if (totalSanitizationIssues > 0) {
+    console.warn(`⚠️ [Embeddings] ${totalSanitizationIssues}/${texts.length} texts had sanitization issues`);
+  }
+
   // OpenAI ondersteunt max 2048 inputs per request
   // We gebruiken kleinere batches voor stabiliteit
   const BATCH_SIZE = 100;
-  const embeddings: number[][] = [];
+  const embeddings: (number[] | null)[] = new Array(texts.length).fill(null);
+  const failedIndices: number[] = [];
   let totalTokens = 0;
 
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batch = texts.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < sanitizedTexts.length; i += BATCH_SIZE) {
+    const batchStartIndex = i;
     const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
+    const totalBatches = Math.ceil(sanitizedTexts.length / BATCH_SIZE);
 
-    console.log(`   Batch ${batchNumber}/${totalBatches}: ${batch.length} texts`);
+    // Build batch with only non-empty sanitized texts
+    const batchItems: { text: string; originalIndex: number }[] = [];
+    for (let j = i; j < Math.min(i + BATCH_SIZE, sanitizedTexts.length); j++) {
+      const sanitized = sanitizedTexts[j];
+      if (sanitized.length > 0 && !exceedsTokenLimit(sanitized)) {
+        batchItems.push({ text: sanitized, originalIndex: j });
+      } else if (sanitized.length === 0) {
+        console.warn(`⚠️ [Embeddings] Skipping empty text at index ${j}`);
+        failedIndices.push(j);
+      } else {
+        console.warn(`⚠️ [Embeddings] Skipping text at index ${j} (exceeds token limit)`);
+        failedIndices.push(j);
+      }
+    }
 
-    const response = await client.embeddings.create({
-      model: config.model,
-      input: batch,
-      dimensions: config.dimensions
-    });
+    if (batchItems.length === 0) {
+      console.warn(`⚠️ [Embeddings] Entire batch ${batchNumber} was empty after sanitization`);
+      continue;
+    }
 
-    totalTokens += response.usage?.total_tokens || 0;
+    console.log(`   Batch ${batchNumber}/${totalBatches}: ${batchItems.length} texts (of ${BATCH_SIZE} max)`);
 
-    // Voeg embeddings toe in dezelfde volgorde als input
-    response.data
-      .sort((a, b) => a.index - b.index)
-      .forEach(item => {
-        embeddings.push(item.embedding);
+    try {
+      const response = await client.embeddings.create({
+        model: config.model,
+        input: batchItems.map(item => item.text),
+        dimensions: config.dimensions
       });
+
+      totalTokens += response.usage?.total_tokens || 0;
+
+      // Map embeddings back to original positions
+      response.data
+        .sort((a, b) => a.index - b.index)
+        .forEach((item, idx) => {
+          const originalIndex = batchItems[idx].originalIndex;
+          embeddings[originalIndex] = item.embedding;
+        });
+
+    } catch (batchError) {
+      const errorMessage = batchError instanceof Error ? batchError.message : String(batchError);
+      console.error(`❌ [Embeddings] Batch ${batchNumber} failed: ${errorMessage}`);
+      console.log(`   Retrying batch ${batchNumber} one-by-one...`);
+
+      // Fallback: process each text individually
+      for (const { text, originalIndex } of batchItems) {
+        try {
+          const singleResponse = await client.embeddings.create({
+            model: config.model,
+            input: text,
+            dimensions: config.dimensions
+          });
+
+          totalTokens += singleResponse.usage?.total_tokens || 0;
+          embeddings[originalIndex] = singleResponse.data[0].embedding;
+          console.log(`   ✓ Recovered chunk ${originalIndex}`);
+
+        } catch (singleError) {
+          const singleErrorMessage = singleError instanceof Error ? singleError.message : String(singleError);
+          console.error(`   ✗ Failed chunk ${originalIndex}: ${singleErrorMessage}`);
+          failedIndices.push(originalIndex);
+        }
+      }
+    }
   }
+
+  // Replace null embeddings with placeholder zeros for failed chunks
+  const finalEmbeddings: number[][] = embeddings.map((emb, idx) => {
+    if (emb === null) {
+      if (!failedIndices.includes(idx)) {
+        failedIndices.push(idx);
+      }
+      // Return zero vector as placeholder
+      return new Array(config.dimensions).fill(0);
+    }
+    return emb;
+  });
 
   const totalCost = (totalTokens / 1_000_000) * config.costPer1MTokens;
 
-  console.log(`✅ [Embeddings] Batch complete: ${totalTokens} tokens, $${totalCost.toFixed(6)}`);
+  if (failedIndices.length > 0) {
+    console.warn(`⚠️ [Embeddings] ${failedIndices.length} chunks failed and have placeholder embeddings`);
+  }
+
+  console.log(`✅ [Embeddings] Batch complete: ${totalTokens} tokens, $${totalCost.toFixed(6)}, ${failedIndices.length} failures`);
 
   return {
-    embeddings,
+    embeddings: finalEmbeddings,
     totalTokens,
-    totalCost
+    totalCost,
+    failedIndices
   };
 }
 

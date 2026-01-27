@@ -57,7 +57,7 @@ export default function TenantTestPage({ params }: PageProps) {
       if (!res.ok) throw new Error('Failed to start test');
 
       const data = await res.json();
-      router.push(`/admin/test/${tenantId}/${data.test_run.id}`);
+      router.push(`/admin/products/hr-bot/test/${tenantId}/${data.test_run.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start test');
       setStarting(false);
@@ -150,7 +150,7 @@ export default function TenantTestPage({ params }: PageProps) {
           </div>
           <div className="flex items-center space-x-4">
             <Link
-              href={`/admin/test/${tenantId}/templates`}
+              href={`/admin/products/hr-bot/test/${tenantId}/templates`}
               className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition"
             >
               Templates beheren
@@ -271,7 +271,7 @@ export default function TenantTestPage({ params }: PageProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Link
-                        href={`/admin/test/${tenantId}/${run.id}`}
+                        href={`/admin/products/hr-bot/test/${tenantId}/${run.id}`}
                         className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                       >
                         Bekijk

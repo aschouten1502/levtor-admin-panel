@@ -355,6 +355,13 @@ export interface RAGQueryDetails {
     translationCost: number;     // Cost of translation API call
     translationLatencyMs: number; // Time for translation
   };
+  // Conversation-aware query expansion (v2.3)
+  contextExpansion?: {
+    wasExpanded: boolean;        // Was query expanded with conversation context?
+    expandedQuery: string;       // Query after expansion
+    cost: number;                // Cost of expansion (GPT-4o-mini)
+    latencyMs: number;           // Time for expansion
+  };
 }
 
 /**
@@ -401,6 +408,13 @@ export interface RAGSearchDetails {
   rawResults: RAGRawSearchResult[];
   matchedTerms?: string[];
   mergeStats?: RAGMergeStats;
+  // Relevance filtering stats (v2.4)
+  relevanceFilter?: {
+    minScore: number;
+    beforeFilter: number;
+    afterFilter: number;
+    removedCount: number;
+  };
 }
 
 /**
@@ -448,6 +462,7 @@ export interface RAGCostBreakdown {
   embedding: number;             // Query embedding cost
   reranking: number;             // Cohere reranking cost
   translation?: number;          // Query translation cost (GPT-4o-mini)
+  contextExpansion?: number;     // Context expansion cost (GPT-4o-mini)
   openai: number;                // OpenAI chat completion cost
   total: number;
 }

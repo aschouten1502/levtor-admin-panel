@@ -51,14 +51,14 @@ type PatternColorMode = 'grayscale' | 'original' | 'tinted';
  * Get scale classes for logo pattern per device
  * Maps to LogoBackground.tsx responsive breakpoints:
  * - mobile: base (no prefix)
- * - tablet: sm: breakpoint
- * - desktop: lg: breakpoint
+ * - tablet: md: breakpoint
+ * - desktop: lg:/xl: breakpoint (using lg values for preview)
  */
 function getLogoScaleClasses(scale: PatternScale, device: DeviceType): string {
-  // LogoBackground.tsx values:
-  // small:  'w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12'
-  // medium: 'w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20'
-  // large:  'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28'
+  // LogoBackground.tsx values (updated with better desktop scaling):
+  // small:  'w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-16 lg:h-16 xl:w-20 xl:h-20'
+  // medium: 'w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-24 lg:h-24 xl:w-32 xl:h-32'
+  // large:  'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-32 lg:h-32 xl:w-40 xl:h-40'
   const scales = {
     mobile: {
       small: 'w-8 h-8',      // base
@@ -71,9 +71,9 @@ function getLogoScaleClasses(scale: PatternScale, device: DeviceType): string {
       large: 'w-24 h-24',    // md:
     },
     desktop: {
-      small: 'w-12 h-12',    // md: (no lg for small)
-      medium: 'w-20 h-20',   // lg:
-      large: 'w-28 h-28',    // lg:
+      small: 'w-16 h-16',    // lg:
+      medium: 'w-24 h-24',   // lg:
+      large: 'w-32 h-32',    // lg:
     },
   };
   return scales[device][scale];
@@ -110,32 +110,37 @@ function getTextScaleClasses(scale: PatternScale, device: DeviceType): string {
 
 /**
  * Get density configuration for logo pattern per device
- * SAME itemCount as LogoBackground.tsx, but selecting correct grid breakpoint
+ * NOTE: Desktop preview uses fewer columns than actual desktop because
+ * the preview container is ~600-700px wide (split-view with settings form),
+ * not actual full desktop width. This ensures logos appear proportionally correct.
  */
 function getLogoDensityConfig(density: PatternDensity, device: DeviceType): {
   itemCount: number;
   gridClasses: string;
   gapClasses: string;
 } {
-  // LogoBackground.tsx values:
-  // low:    itemCount: 48,  'grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10'
-  // medium: itemCount: 90,  'grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12'
-  // high:   itemCount: 144, 'grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16'
+  // LogoBackground.tsx actual values:
+  // low:    'grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10'
+  // medium: 'grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12'
+  // high:   'grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16'
+  //
+  // Preview uses reduced columns for desktop to match visual appearance
   const configs = {
     mobile: {
-      low:    { itemCount: 48,  gridClasses: 'grid-cols-4',  gapClasses: 'gap-8' },
-      medium: { itemCount: 90,  gridClasses: 'grid-cols-6',  gapClasses: 'gap-6' },
-      high:   { itemCount: 144, gridClasses: 'grid-cols-8',  gapClasses: 'gap-4' },
+      low:    { itemCount: 24,  gridClasses: 'grid-cols-4',  gapClasses: 'gap-8' },
+      medium: { itemCount: 36,  gridClasses: 'grid-cols-6',  gapClasses: 'gap-6' },
+      high:   { itemCount: 48,  gridClasses: 'grid-cols-8',  gapClasses: 'gap-4' },
     },
     tablet: {
-      low:    { itemCount: 48,  gridClasses: 'grid-cols-8',  gapClasses: 'gap-12' },
-      medium: { itemCount: 90,  gridClasses: 'grid-cols-10', gapClasses: 'gap-10' },
-      high:   { itemCount: 144, gridClasses: 'grid-cols-12', gapClasses: 'gap-8' },
+      low:    { itemCount: 32,  gridClasses: 'grid-cols-6',  gapClasses: 'gap-10' },
+      medium: { itemCount: 48,  gridClasses: 'grid-cols-8',  gapClasses: 'gap-8' },
+      high:   { itemCount: 60,  gridClasses: 'grid-cols-10', gapClasses: 'gap-6' },
     },
     desktop: {
-      low:    { itemCount: 48,  gridClasses: 'grid-cols-10', gapClasses: 'gap-16' },
-      medium: { itemCount: 90,  gridClasses: 'grid-cols-12', gapClasses: 'gap-12' },
-      high:   { itemCount: 144, gridClasses: 'grid-cols-16', gapClasses: 'gap-10' },
+      // Reduced columns: preview container is ~600-700px, not full desktop
+      low:    { itemCount: 36,  gridClasses: 'grid-cols-6',  gapClasses: 'gap-12' },
+      medium: { itemCount: 48,  gridClasses: 'grid-cols-8',  gapClasses: 'gap-10' },
+      high:   { itemCount: 60,  gridClasses: 'grid-cols-10', gapClasses: 'gap-8' },
     },
   };
   return configs[device][density];
@@ -143,32 +148,35 @@ function getLogoDensityConfig(density: PatternDensity, device: DeviceType): {
 
 /**
  * Get density configuration for text pattern per device
- * SAME itemCount as LogoBackground.tsx, but selecting correct grid breakpoint
+ * NOTE: Desktop preview uses fewer columns for same reason as logo pattern
  */
 function getTextDensityConfig(density: PatternDensity, device: DeviceType): {
   itemCount: number;
   gridClasses: string;
   gapClasses: string;
 } {
-  // LogoBackground.tsx values:
-  // low:    itemCount: 20, 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
-  // medium: itemCount: 40, 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6'
-  // high:   itemCount: 60, 'grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8'
+  // LogoBackground.tsx actual values:
+  // low:    'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+  // medium: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6'
+  // high:   'grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8'
+  //
+  // Preview uses reduced columns for desktop to match visual appearance
   const configs = {
     mobile: {
-      low:    { itemCount: 20, gridClasses: 'grid-cols-2', gapClasses: 'gap-16' },
-      medium: { itemCount: 40, gridClasses: 'grid-cols-3', gapClasses: 'gap-12' },
-      high:   { itemCount: 60, gridClasses: 'grid-cols-4', gapClasses: 'gap-8' },
+      low:    { itemCount: 12, gridClasses: 'grid-cols-2', gapClasses: 'gap-12' },
+      medium: { itemCount: 18, gridClasses: 'grid-cols-3', gapClasses: 'gap-10' },
+      high:   { itemCount: 24, gridClasses: 'grid-cols-4', gapClasses: 'gap-8' },
     },
     tablet: {
-      low:    { itemCount: 20, gridClasses: 'grid-cols-4', gapClasses: 'gap-24' },
-      medium: { itemCount: 40, gridClasses: 'grid-cols-5', gapClasses: 'gap-20' },
-      high:   { itemCount: 60, gridClasses: 'grid-cols-6', gapClasses: 'gap-16' },
+      low:    { itemCount: 16, gridClasses: 'grid-cols-3', gapClasses: 'gap-16' },
+      medium: { itemCount: 24, gridClasses: 'grid-cols-4', gapClasses: 'gap-14' },
+      high:   { itemCount: 30, gridClasses: 'grid-cols-5', gapClasses: 'gap-12' },
     },
     desktop: {
-      low:    { itemCount: 20, gridClasses: 'grid-cols-4', gapClasses: 'gap-28' },
-      medium: { itemCount: 40, gridClasses: 'grid-cols-6', gapClasses: 'gap-24' },
-      high:   { itemCount: 60, gridClasses: 'grid-cols-8', gapClasses: 'gap-20' },
+      // Reduced columns: preview container is ~600-700px, not full desktop
+      low:    { itemCount: 16, gridClasses: 'grid-cols-3', gapClasses: 'gap-20' },
+      medium: { itemCount: 24, gridClasses: 'grid-cols-4', gapClasses: 'gap-16' },
+      high:   { itemCount: 30, gridClasses: 'grid-cols-5', gapClasses: 'gap-14' },
     },
   };
   return configs[device][density];
@@ -556,28 +564,132 @@ export default function LivePreview({ tenant, onElementClick }: LivePreviewProps
         </div>
       </div>
 
-      {/* Fun Facts Preview (Loading State) */}
+      {/* Fun Facts Preview (Loading State) - Matches new LoadingIndicator design */}
       {tenant.fun_facts_enabled && tenant.fun_facts && tenant.fun_facts.length > 0 && (
         <div
-          className="preview-element p-4 bg-gray-50 border-t border-gray-200 cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-inset transition-all"
+          className="preview-element p-4 cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-inset transition-all"
+          style={{ backgroundColor: colors.surface }}
           onClick={handleClick('fun_facts')}
           data-field="fun_facts"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-white shadow flex items-center justify-center">
-              <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: colors.primary, animationDelay: '0ms' }} />
-                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: colors.secondary, animationDelay: '150ms' }} />
-                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: colors.primary, animationDelay: '300ms' }} />
-              </div>
+          <div className="flex gap-3">
+            {/* Bot Avatar */}
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center">
+              <svg
+                className="w-4 h-4"
+                style={{ color: colors.primary }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                />
+              </svg>
             </div>
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm">
-              <p className="text-xs text-gray-600">
-                <span style={{ color: colors.primary }} className="font-medium">
-                  💡 {tenant.fun_facts_prefix || 'Wist je dat'}
-                </span>{' '}
-                {tenant.fun_facts[0]}
-              </p>
+
+            {/* Message Bubble */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden">
+                {/* Thinking Section */}
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {/* Wave Animation Dots */}
+                    <div className="flex items-end gap-[3px] h-5">
+                      <div
+                        className="w-2 h-2 rounded-full animate-bounce"
+                        style={{ backgroundColor: colors.primary, animationDelay: '0ms' }}
+                      />
+                      <div
+                        className="w-2 h-2 rounded-full animate-bounce"
+                        style={{ backgroundColor: colors.primary, animationDelay: '150ms' }}
+                      />
+                      <div
+                        className="w-2 h-2 rounded-full animate-bounce"
+                        style={{ backgroundColor: colors.primary, animationDelay: '300ms' }}
+                      />
+                    </div>
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: colors.primary }}
+                    >
+                      Even denken...
+                    </span>
+                  </div>
+                </div>
+
+                {/* Gradient Divider */}
+                <div
+                  className="h-px"
+                  style={{
+                    background: `linear-gradient(to right, transparent, ${colors.primary}25, transparent)`
+                  }}
+                />
+
+                {/* Fun Fact Content */}
+                <div className="relative px-4 py-3 bg-gradient-to-br from-gray-50/50 to-white">
+                  <div className="flex items-start gap-3">
+                    {/* Lightbulb Icon */}
+                    <div
+                      className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: `${colors.primary}12` }}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        style={{ color: colors.primary }}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                        />
+                      </svg>
+                    </div>
+
+                    {/* Fact Text */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">
+                        {tenant.fun_facts_prefix || 'Wist je dat'}
+                      </p>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        {tenant.fun_facts[0]}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Circular Progress Indicator (static preview) */}
+                  <div className="absolute top-3 right-3">
+                    <svg className="w-5 h-5 -rotate-90" viewBox="0 0 20 20">
+                      <circle
+                        cx="10"
+                        cy="10"
+                        r="8"
+                        fill="none"
+                        stroke={`${colors.primary}15`}
+                        strokeWidth="2"
+                      />
+                      <circle
+                        cx="10"
+                        cy="10"
+                        r="8"
+                        fill="none"
+                        stroke={colors.primary}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeDasharray="25 50.2"
+                        style={{ opacity: 0.5 }}
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

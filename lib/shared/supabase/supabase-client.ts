@@ -114,6 +114,7 @@ export async function logChatRequest(
     event_type?: string;
     error_details?: string;
     rag_details?: Record<string, any>;  // RAG pipeline details for comprehensive logging
+    tenant_product_id?: string;  // Optional: auto-lookup if not provided
   }
 ) {
   // Skip if Supabase is not configured
@@ -132,9 +133,26 @@ export async function logChatRequest(
     console.log(`💾 [Supabase] Logging request to table: ${DATABASE_CONFIG.tableName}`);
     console.log(`🏢 [Supabase] Tenant: ${tenantId}`);
 
+    // Auto-lookup tenant_product_id if not provided
+    let tenantProductId = data.tenant_product_id || null;
+    if (!tenantProductId) {
+      const { data: tenantProduct } = await supabase
+        .from('tenant_products')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('product_id', 'hr_bot')
+        .single();
+
+      if (tenantProduct) {
+        tenantProductId = tenantProduct.id;
+        console.log(`📦 [Supabase] Auto-linked to tenant_product: ${tenantProductId}`);
+      }
+    }
+
     // Build insert payload - tenant_id is now required
     const insertPayload = {
       tenant_id: tenantId,
+      tenant_product_id: tenantProductId,  // Link to tenant product for portal filtering
       session_id: data.session_id || null,
       question: data.question,
       answer: data.answer,

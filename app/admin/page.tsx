@@ -100,7 +100,7 @@ function TenantRow({ tenant }: { tenant: TenantWithStats }) {
           )}
           <div>
             <Link
-              href={`/admin/tenants/${tenant.id}`}
+              href={`/admin/products/hr-bot/tenants/${tenant.id}`}
               className="font-medium text-gray-900 hover:text-blue-600 transition-colors"
             >
               {tenant.name}
@@ -139,7 +139,7 @@ function TenantRow({ tenant }: { tenant: TenantWithStats }) {
       </td>
       <td className="py-4 px-4">
         <Link
-          href={`/admin/tenants/${tenant.id}`}
+          href={`/admin/products/hr-bot/tenants/${tenant.id}`}
           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
         >
           Manage
@@ -175,7 +175,7 @@ export default async function AdminDashboard() {
           <p className="text-gray-500 mt-1">Overview of all tenants and usage statistics</p>
         </div>
         <Link
-          href="/admin/tenants/new"
+          href="/admin/products/hr-bot/tenants/new"
           className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,7 +249,7 @@ export default async function AdminDashboard() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">No tenants yet</h3>
             <p className="text-gray-500 mb-6">Get started by creating your first tenant.</p>
             <Link
-              href="/admin/tenants/new"
+              href="/admin/products/hr-bot/tenants/new"
               className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

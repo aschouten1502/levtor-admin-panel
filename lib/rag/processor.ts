@@ -17,6 +17,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { smartChunkDocument, chunkDocument } from './chunking';
 import { generateEmbeddingsBatch } from './embeddings';
 import { generateMetadataBatch, isMetadataGenerationEnabled } from './metadata-generator';
+import { sanitizeText, validateForEmbedding } from './text-sanitizer';
 import { Document, ProcessingResult, EnhancedChunkMetadata, SmartChunkingOptions, StructuredChunk } from './types';
 import { getDocumentsBucket, ensureBucketExists } from '../admin/storage-service';
 import {
@@ -139,10 +140,17 @@ async function extractTextFromPDF(
 
       const trimmed = pageText.trim();
       if (trimmed.length > 0) {
-        pages.push({
-          pageNumber: pageNum,
-          text: trimmed
-        });
+        // Sanitize text to remove problematic characters that cause "unknown token" errors
+        const sanitized = sanitizeText(trimmed);
+        if (sanitized.length > 0) {
+          pages.push({
+            pageNumber: pageNum,
+            text: sanitized
+          });
+          if (sanitized.length < trimmed.length) {
+            console.log(`   Page ${pageNum}: sanitized ${trimmed.length - sanitized.length} chars`);
+          }
+        }
       }
 
       return trimmed;
@@ -392,9 +400,13 @@ export async function processDocument(
       });
     }
 
-    const { embeddings, totalTokens, totalCost } = await generateEmbeddingsBatch(
+    const { embeddings, totalTokens, totalCost, failedIndices } = await generateEmbeddingsBatch(
       chunkContents
     );
+
+    if (failedIndices.length > 0) {
+      console.warn(`⚠️ [Processor] ${failedIndices.length} chunks failed embedding generation`);
+    }
 
     // 6. Sla chunks op in database
     console.log('\n💾 [Processor] Saving to database...');
@@ -728,9 +740,13 @@ export async function reprocessDocument(
       metadataCost = metadataResult.totalCost;
     }
 
-    const { embeddings, totalTokens, totalCost } = await generateEmbeddingsBatch(
+    const { embeddings, totalTokens, totalCost, failedIndices } = await generateEmbeddingsBatch(
       chunkContents
     );
+
+    if (failedIndices.length > 0) {
+      console.warn(`⚠️ [Processor] ${failedIndices.length} chunks failed embedding generation during reprocess`);
+    }
 
     const chunkRecords = chunkContents.map((content, idx) => {
       const enhancedMetadata = chunkMetadataMap.get(idx) || {};

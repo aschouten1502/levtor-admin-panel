@@ -333,7 +333,7 @@ export default function NewTenantPage() {
 
           <div className="flex items-center justify-center gap-4">
             <Link
-              href={`/admin/tenants/${createdTenantId}`}
+              href={`/admin/products/hr-bot/tenants/${createdTenantId}`}
               className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               Manage Tenant

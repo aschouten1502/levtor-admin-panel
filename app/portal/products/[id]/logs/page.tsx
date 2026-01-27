@@ -90,15 +90,6 @@ export default function ProductLogsPage() {
     });
   };
 
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return '-';
-    return new Intl.NumberFormat('nl-NL', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 4,
-    }).format(amount);
-  };
-
   const languageNames: Record<string, string> = {
     nl: 'Nederlands',
     en: 'English',
@@ -211,9 +202,6 @@ export default function ProductLogsPage() {
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     {log.response_time_ms && (
                       <span>{(log.response_time_ms / 1000).toFixed(2)}s</span>
-                    )}
-                    {log.total_cost !== null && (
-                      <span>{formatCurrency(log.total_cost)}</span>
                     )}
                   </div>
                 </div>

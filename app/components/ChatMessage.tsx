@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import ReactMarkdown from 'react-markdown';
 import { getPdfUrlForTenant, getPdfUrlByFilenameForTenant, isPdfAvailable } from '@/lib/shared/pdf-urls';
 import { BRANDING } from '@/lib/shared/branding.config';
 import { useTenant } from '../providers/TenantProvider';
@@ -148,16 +149,33 @@ export const ChatMessage = ({ role, content, citations, logId, selectedLanguage 
             className={`px-4 py-3 rounded-2xl shadow-lg text-sm sm:text-base ${!isUser ? "bg-white text-gray-800 border border-gray-100" : "text-white"}`}
             style={isUser ? userBubbleStyle : undefined}
           >
-            <p className="whitespace-pre-wrap break-words overflow-hidden">{content}</p>
+            {isUser ? (
+              <p className="whitespace-pre-wrap break-words overflow-hidden">{content}</p>
+            ) : (
+              <div className="prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:my-2 prose-strong:text-gray-900 break-words overflow-hidden">
+                <ReactMarkdown>{content}</ReactMarkdown>
+              </div>
+            )}
           </div>
 
           {/* Citations - Adapted for Pinecone format with file_path support */}
           {citations && citations.length > 0 && (
             <div className="mt-3 space-y-2">
               {(() => {
+                // Filter out low-relevance citations (below 10% threshold - matches backend filter)
+                const MIN_RELEVANCE_THRESHOLD = 0.10;
+                const relevantCitations = citations.filter((citation: any) =>
+                  !citation.relevance_score || citation.relevance_score >= MIN_RELEVANCE_THRESHOLD
+                );
+
+                // If no citations pass the threshold, show nothing
+                if (relevantCitations.length === 0) {
+                  return null;
+                }
+
                 // Map files with their pages and storage path
                 const fileMap = new Map<string, { pages: Set<number>; filePath?: string }>();
-                citations.forEach((citation: any) => {
+                relevantCitations.forEach((citation: any) => {
                   citation.references?.forEach((ref: any) => {
                     const fileName = ref.file?.name || 'Onbekend';
                     const filePath = ref.file?.path;

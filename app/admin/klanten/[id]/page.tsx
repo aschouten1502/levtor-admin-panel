@@ -454,7 +454,7 @@ export default function AdminKlantDetailPage({
             </Link>
 
             <Link
-              href={`/admin/logs?tenant=${id}`}
+              href={`/admin/products/hr-bot/logs/${id}`}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center gap-4">
