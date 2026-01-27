@@ -57,6 +57,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('nl');
   const [tenantId, setTenantId] = useState<string>('');
+  const [pendingQuestion, setPendingQuestion] = useState<string>('');
 
   // Get tenant ID from URL query parameter on mount
   useEffect(() => {
@@ -319,7 +320,10 @@ export default function Home() {
         <div className="relative w-full max-w-full px-4 sm:px-6 py-6 overflow-x-hidden">
           {/* Toon welkomstscherm als er nog geen messages zijn */}
           {messages.length === 0 ? (
-            <WelcomeScreen selectedLanguage={selectedLanguage} />
+            <WelcomeScreen
+              selectedLanguage={selectedLanguage}
+              onExampleClick={(question) => setPendingQuestion(question)}
+            />
           ) : (
             <div className="space-y-4 sm:space-y-6">
               {/* Render alle messages */}
@@ -348,6 +352,8 @@ export default function Home() {
           onSendMessage={handleSendMessage}
           disabled={isLoading}
           selectedLanguage={selectedLanguage}
+          externalValue={pendingQuestion}
+          onExternalValueUsed={() => setPendingQuestion('')}
         />
       </div>
     </div>

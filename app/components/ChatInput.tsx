@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { translations, type LanguageCode } from "../translations";
 import { BRANDING } from "@/lib/shared/branding.config";
 import { useTenant } from "../providers/TenantProvider";
@@ -10,12 +10,22 @@ interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled?: boolean;
   selectedLanguage: string;
+  externalValue?: string;
+  onExternalValueUsed?: () => void;
 }
 
-export const ChatInput = ({ onSendMessage, disabled, selectedLanguage }: ChatInputProps) => {
+export const ChatInput = ({ onSendMessage, disabled, selectedLanguage, externalValue, onExternalValueUsed }: ChatInputProps) => {
   const { tenant } = useTenant();
   const [input, setInput] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+
+  // Handle external value (e.g., from clicking example questions)
+  useEffect(() => {
+    if (externalValue) {
+      setInput(externalValue);
+      onExternalValueUsed?.();
+    }
+  }, [externalValue, onExternalValueUsed]);
 
   // Get translations: prefer tenant's ui_texts, fallback to static translations
   const staticT = translations[selectedLanguage as LanguageCode] || translations.nl;

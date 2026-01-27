@@ -7,9 +7,10 @@ import { adjustColorBrightness } from "@/lib/ui/color-utils";
 
 interface WelcomeScreenProps {
   selectedLanguage: string;
+  onExampleClick?: (question: string) => void;
 }
 
-export const WelcomeScreen = ({ selectedLanguage }: WelcomeScreenProps) => {
+export const WelcomeScreen = ({ selectedLanguage, onExampleClick }: WelcomeScreenProps) => {
   const { tenant } = useTenant();
 
   // Get translations: prefer tenant's ui_texts, fallback to static translations
@@ -76,12 +77,17 @@ export const WelcomeScreen = ({ selectedLanguage }: WelcomeScreenProps) => {
 
       <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
         {t.examples.map((example, idx) => (
-          <div key={idx} className="bg-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all border border-gray-100">
+          <button
+            key={idx}
+            type="button"
+            onClick={() => onExampleClick?.(example)}
+            className="bg-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all border border-gray-100 text-left cursor-pointer hover:border-blue-300 hover:scale-[1.02] active:scale-[0.98]"
+          >
             <p className="text-xs text-gray-500">{t.exampleLabel}</p>
             <p className="mt-1 text-sm sm:text-base font-medium text-gray-800">
               "{example}"
             </p>
-          </div>
+          </button>
         ))}
       </div>
 
