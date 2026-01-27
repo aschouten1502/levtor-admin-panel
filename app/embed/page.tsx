@@ -67,6 +67,7 @@ export default function EmbedPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState(paramLang);
+  const [pendingQuestion, setPendingQuestion] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Session ID voor chat continuiteit (per embed instance)
@@ -293,6 +294,7 @@ export default function EmbedPage() {
             <WelcomeScreenWrapper
               selectedLanguage={selectedLanguage}
               hidePoweredBy={hidePoweredBy}
+              onExampleClick={(question) => setPendingQuestion(question)}
             />
           ) : (
             <div className="space-y-4 sm:space-y-6">
@@ -322,6 +324,8 @@ export default function EmbedPage() {
           onSendMessage={handleSendMessage}
           disabled={isLoading}
           selectedLanguage={selectedLanguage}
+          externalValue={pendingQuestion}
+          onExternalValueUsed={() => setPendingQuestion('')}
         />
       </div>
     </div>
@@ -335,9 +339,10 @@ export default function EmbedPage() {
 interface WelcomeScreenWrapperProps {
   selectedLanguage: string;
   hidePoweredBy: boolean;
+  onExampleClick?: (question: string) => void;
 }
 
-function WelcomeScreenWrapper({ selectedLanguage, hidePoweredBy }: WelcomeScreenWrapperProps) {
+function WelcomeScreenWrapper({ selectedLanguage, hidePoweredBy, onExampleClick }: WelcomeScreenWrapperProps) {
   const { tenant } = useTenant();
 
   // Als hidePoweredBy actief is, override tenant setting tijdelijk
@@ -346,7 +351,7 @@ function WelcomeScreenWrapper({ selectedLanguage, hidePoweredBy }: WelcomeScreen
     // So we wrap the WelcomeScreen and use CSS to hide if needed
     return (
       <div className={hidePoweredBy ? '[&_[data-powered-by]]:hidden' : ''}>
-        <WelcomeScreen selectedLanguage={selectedLanguage} />
+        <WelcomeScreen selectedLanguage={selectedLanguage} onExampleClick={onExampleClick} />
         {/* Extra style to hide powered by via CSS if URL param is set */}
         {hidePoweredBy && (
           <style>{`
@@ -357,5 +362,5 @@ function WelcomeScreenWrapper({ selectedLanguage, hidePoweredBy }: WelcomeScreen
     );
   }
 
-  return <WelcomeScreen selectedLanguage={selectedLanguage} />;
+  return <WelcomeScreen selectedLanguage={selectedLanguage} onExampleClick={onExampleClick} />;
 }
